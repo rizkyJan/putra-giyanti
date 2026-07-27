@@ -117,4 +117,15 @@ class UserController extends Controller
 
         return redirect()->route('admin.users.index')->with('success', 'Anggota berhasil dihapus.');
     }
+
+    public function toggleStatus(User $user)
+    {
+        // Balikkan status saat ini (jika true jadi false, jika false jadi true)
+        $user->update(['is_active' => !$user->is_active]);
+
+        $statusText = $user->is_active ? 'diaktifkan' : 'dinonaktifkan';
+
+        // Kembalikan ke halaman sebelumnya dengan pesan sukses
+        return back()->with('success', "Akun {$user->name} berhasil {$statusText}.");
+    }
 }

@@ -3,20 +3,22 @@ import { Head, Link, router, usePage } from "@inertiajs/react";
 import { useState } from "react";
 
 export default function Index({ auth, users }) {
-    // Mengambil flash message (jika ada with('success') dari controller)
     const { flash } = usePage().props;
 
-    // State untuk mengontrol modal hapus
+    // State untuk Modal Hapus
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [userToDelete, setUserToDelete] = useState(null);
 
-    // Fungsi saat tombol hapus di tabel diklik (buka modal & simpan ID)
+    // State untuk Modal Status (Aktif/Nonaktif)
+    const [showStatusModal, setShowStatusModal] = useState(false);
+    const [userToToggle, setUserToToggle] = useState(null);
+
+    // --- FUNGSI UNTUK HAPUS ---
     const handleDeleteClick = (id) => {
         setUserToDelete(id);
         setShowDeleteModal(true);
     };
 
-    // Fungsi untuk mengeksekusi penghapusan setelah dikonfirmasi di modal
     const confirmDelete = () => {
         if (userToDelete) {
             router.delete(route("admin.users.destroy", userToDelete), {
@@ -26,6 +28,28 @@ export default function Index({ auth, users }) {
                     setUserToDelete(null);
                 },
             });
+        }
+    };
+
+    // --- FUNGSI UNTUK UBAH STATUS ---
+    const handleStatusClick = (user) => {
+        setUserToToggle(user);
+        setShowStatusModal(true);
+    };
+
+    const confirmStatusChange = () => {
+        if (userToToggle) {
+            router.patch(
+                route("admin.users.toggle-status", userToToggle.id),
+                {},
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setShowStatusModal(false);
+                        setUserToToggle(null);
+                    },
+                },
+            );
         }
     };
 
@@ -45,7 +69,6 @@ export default function Index({ auth, users }) {
                 </Link>
             </div>
 
-            {/* Flash Message Sukses */}
             {flash?.success && (
                 <div className="mb-4 p-4 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl font-medium">
                     {flash.success}
@@ -60,7 +83,9 @@ export default function Index({ auth, users }) {
                                 <th className="p-4 font-semibold">Nama</th>
                                 <th className="p-4 font-semibold">Kontak</th>
                                 <th className="p-4 font-semibold">Role</th>
-                                <th className="p-4 font-semibold">Status</th>
+                                <th className="p-4 font-semibold text-center">
+                                    Status
+                                </th>
                                 <th className="p-4 font-semibold text-center">
                                     Aksi
                                 </th>
@@ -98,14 +123,19 @@ export default function Index({ auth, users }) {
                                                 {user.role}
                                             </span>
                                         </td>
-                                        <td className="p-4">
-                                            <span
-                                                className={`px-3 py-1 rounded-full text-xs font-semibold ${user.is_active ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}
+                                        <td className="p-4 text-center">
+                                            {/* Label status diubah menjadi tombol */}
+                                            <button
+                                                onClick={() =>
+                                                    handleStatusClick(user)
+                                                }
+                                                className={`px-3 py-1 rounded-full text-xs font-semibold cursor-pointer hover:shadow-md transition-all ${user.is_active ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-rose-100 text-rose-700 hover:bg-rose-200"}`}
+                                                title={`Klik untuk ${user.is_active ? "menonaktifkan" : "mengaktifkan"} anggota ini`}
                                             >
                                                 {user.is_active
                                                     ? "Aktif"
                                                     : "Nonaktif"}
-                                            </span>
+                                            </button>
                                         </td>
                                         <td className="p-4 flex justify-center gap-2">
                                             <Link
@@ -134,13 +164,85 @@ export default function Index({ auth, users }) {
                 </div>
             </div>
 
-            {/* Pop-up Modal Konfirmasi Hapus */}
+            {/* Modal Konfirmasi Ubah Status (BARU) */}
+            {showStatusModal && userToToggle && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in duration-200">
+                        <div className="text-center">
+                            <div
+                                className={`mx-auto flex items-center justify-center h-14 w-14 rounded-full mb-4 ${userToToggle.is_active ? "bg-rose-100" : "bg-emerald-100"}`}
+                            >
+                                {userToToggle.is_active ? (
+                                    <svg
+                                        className="h-7 w-7 text-rose-600"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth="2"
+                                            d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                                        />
+                                    </svg>
+                                ) : (
+                                    <svg
+                                        className="h-7 w-7 text-emerald-600"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth="2"
+                                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                        />
+                                    </svg>
+                                )}
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800 mb-2">
+                                {userToToggle.is_active
+                                    ? "Nonaktifkan Akun?"
+                                    : "Aktifkan Akun?"}
+                            </h3>
+                            <p className="text-sm text-slate-500 mb-6">
+                                {userToToggle.is_active
+                                    ? `Apakah Anda yakin ingin menonaktifkan ${userToToggle.name}? Mereka tidak akan bisa masuk ke dalam sistem.`
+                                    : `Apakah Anda yakin ingin mengaktifkan ${userToToggle.name}? Mereka akan diberi akses masuk ke dalam sistem.`}
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        setShowStatusModal(false);
+                                        setUserToToggle(null);
+                                    }}
+                                    className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    onClick={confirmStatusChange}
+                                    className={`flex-1 px-4 py-2.5 font-semibold rounded-xl text-white transition-colors shadow-sm ${userToToggle.is_active ? "bg-rose-600 hover:bg-rose-700 shadow-rose-200" : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200"}`}
+                                >
+                                    Ya,{" "}
+                                    {userToToggle.is_active
+                                        ? "Nonaktifkan"
+                                        : "Aktifkan"}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Konfirmasi Hapus (LAMA - Tetap Dipertahankan) */}
             {showDeleteModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
                     <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in duration-200">
                         <div className="text-center">
                             <div className="mx-auto flex items-center justify-center h-14 w-14 rounded-full bg-rose-100 mb-4">
-                                {/* Icon Trash */}
                                 <svg
                                     className="h-7 w-7 text-rose-600"
                                     fill="none"

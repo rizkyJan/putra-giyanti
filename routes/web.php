@@ -30,6 +30,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
 
     // CRUD Controllers
     Route::resource('users', UserController::class)->except(['show']);
+    Route::patch('/users/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('users.toggle-status');
     Route::resource('meetings', MeetingController::class);
     Route::post('/meetings/{meeting}/start', [MeetingController::class, 'startMeeting'])->name('meetings.start');
     Route::post('/attendances/scan', [MeetingController::class, 'scan'])->name('attendances.scan');

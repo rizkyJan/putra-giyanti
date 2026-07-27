@@ -12,13 +12,11 @@ use Exception;
 
 class GoogleAuthController extends Controller
 {
-    // Mengarahkan user ke halaman login Google
     public function redirect()
     {
         return Socialite::driver('google')->redirect();
     }
 
-    // Menangani balikan dari Google
     public function callback()
     {
         try {
@@ -28,14 +26,14 @@ class GoogleAuthController extends Controller
             $user = User::where('email', $googleUser->getEmail())->first();
 
             if (!$user) {
-                // Jika belum ada, daftarkan otomatis (Auto-Register)
+                // KUNCI 1: Jika user baru, otomatis set is_active menjadi false (0)
                 $user = User::create([
                     'name' => $googleUser->getName(),
                     'email' => $googleUser->getEmail(),
                     'google_id' => $googleUser->getId(),
-                    // Buat password acak yang aman karena mereka login via Google
                     'password' => Hash::make(Str::random(16)),
-                    'role' => 'anggota'
+                    'role' => 'anggota',
+                    'is_active' => false // <-- Wajib verifikasi admin
                 ]);
             } else {
                 // Jika sudah ada tapi google_id kosong, perbarui datanya
@@ -44,10 +42,15 @@ class GoogleAuthController extends Controller
                 }
             }
 
-            // Login user
+            // KUNCI 2: Blokir login jika akun belum diverifikasi/aktif
+            if (!$user->is_active) {
+                return redirect('/login')->with('status', 'Akun Anda berhasil didaftarkan, namun sedang menunggu verifikasi oleh Admin. Silakan hubungi Admin untuk aktivasi.');
+            }
+
+            // Jika aktif, proses login user
             Auth::login($user);
 
-            // Arahkan ke dashboard
+            // Arahkan ke dashboard sesuai role
             if ($user->role === 'admin') {
                 return redirect()->route('admin.dashboard');
             } elseif ($user->role === 'anggota') {
