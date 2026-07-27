@@ -40,24 +40,16 @@ const programs = [
 
 function getPostImageUrl(image) {
     if (!image) return null;
-
-    if (/^https?:\/\//i.test(image)) {
-        return image;
-    }
-
-    if (image.startsWith("/")) {
-        return image;
-    }
-
+    if (/^https?:\/\//i.test(image)) return image;
+    if (image.startsWith("/")) return image;
     return `/storage/${image}`;
 }
 
 function formatPostDate(date) {
-    const parsedDate = new Date(date);
-
-    if (Number.isNaN(parsedDate.getTime())) {
-        return "";
-    }
+    if (!date) return "";
+    const safeDate = typeof date === "string" ? date.replace(/-/g, "/") : date;
+    const parsedDate = new Date(safeDate);
+    if (Number.isNaN(parsedDate.getTime())) return "";
 
     return new Intl.DateTimeFormat("id-ID", {
         day: "2-digit",
@@ -163,18 +155,17 @@ function LogoModel({ reduceMotion }) {
 
             if (map) {
                 map.colorSpace = THREE.SRGBColorSpace;
-                map.anisotropy = 8;
+                map.anisotropy = 4; // Diturunkan dari 8 agar lebih ringan
                 map.needsUpdate = true;
             }
 
+            // OPTIMASI: Ganti MeshPhysicalMaterial ke MeshStandardMaterial yang jauh lebih ringan
             if (materialName.includes("gold")) {
-                object.material = new THREE.MeshPhysicalMaterial({
+                object.material = new THREE.MeshStandardMaterial({
                     color: "#f2aa20",
-                    metalness: 0.9,
-                    roughness: 0.13,
-                    clearcoat: 1,
-                    clearcoatRoughness: 0.08,
-                    envMapIntensity: 2.5,
+                    metalness: 0.85,
+                    roughness: 0.18,
+                    envMapIntensity: 2.0,
                 });
                 return;
             }
@@ -184,29 +175,25 @@ function LogoModel({ reduceMotion }) {
                 object.name === "edge" ||
                 object.name === "back"
             ) {
-                object.material = new THREE.MeshPhysicalMaterial({
+                object.material = new THREE.MeshStandardMaterial({
                     color: "#52070c",
-                    metalness: 0.42,
-                    roughness: 0.16,
-                    clearcoat: 1,
-                    clearcoatRoughness: 0.08,
-                    envMapIntensity: 1.8,
+                    metalness: 0.35,
+                    roughness: 0.25,
+                    envMapIntensity: 1.5,
                 });
                 return;
             }
 
-            object.material = new THREE.MeshPhysicalMaterial({
+            object.material = new THREE.MeshStandardMaterial({
                 map,
                 color: "#ffffff",
                 transparent: oldMaterial?.transparent ?? false,
                 opacity: oldMaterial?.opacity ?? 1,
                 alphaTest: oldMaterial?.alphaTest ?? 0,
                 side: oldMaterial?.side ?? THREE.FrontSide,
-                metalness: 0.08,
-                roughness: 0.16,
-                clearcoat: 1,
-                clearcoatRoughness: 0.06,
-                envMapIntensity: 2.1,
+                metalness: 0.1,
+                roughness: 0.2,
+                envMapIntensity: 2.0,
             });
         });
 
@@ -292,17 +279,13 @@ function LogoScene() {
                     repeat: Infinity,
                     ease: "easeInOut",
                 }}
-                className="absolute inset-[13%] rounded-full bg-red-400/25 blur-[80px]"
+                className="absolute inset-[13%] rounded-full bg-red-400/25 blur-[40px] md:blur-[80px]"
             />
 
             <motion.div
                 aria-hidden="true"
                 animate={reduceMotion ? undefined : { rotate: 360 }}
-                transition={{
-                    duration: 34,
-                    repeat: Infinity,
-                    ease: "linear",
-                }}
+                transition={{ duration: 34, repeat: Infinity, ease: "linear" }}
                 className="absolute inset-[8%] rounded-full border border-amber-200/20"
             >
                 <span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-amber-200 shadow-[0_0_18px_rgba(253,230,138,.9)]" />
@@ -311,24 +294,21 @@ function LogoScene() {
             <motion.div
                 aria-hidden="true"
                 animate={reduceMotion ? undefined : { rotate: -360 }}
-                transition={{
-                    duration: 26,
-                    repeat: Infinity,
-                    ease: "linear",
-                }}
+                transition={{ duration: 26, repeat: Infinity, ease: "linear" }}
                 className="absolute inset-[18%] rounded-full border border-dashed border-white/15"
             />
 
             <div className="absolute inset-x-[15%] bottom-[7%] h-16 rounded-full bg-black/40 blur-3xl" />
 
+            {/* OPTIMASI: Batasi DPR menjadi 1.2 dan Matikan antialias agar HP tidak panas/ngelag */}
             <Canvas
                 shadows
-                dpr={[1, 1.75]}
+                dpr={[1, 1.2]}
                 camera={{ position: [0, 0, 7.4], fov: 31, near: 0.1, far: 50 }}
                 gl={{
                     alpha: true,
-                    antialias: true,
-                    powerPreference: "high-performance",
+                    antialias: false, // Dimatikan untuk mendongkrak FPS di HP
+                    powerPreference: "default",
                 }}
                 onCreated={({ gl }) => {
                     gl.outputColorSpace = THREE.SRGBColorSpace;
@@ -339,13 +319,14 @@ function LogoScene() {
             >
                 <ambientLight intensity={0.72} />
 
+                {/* OPTIMASI: Resolusi bayangan diturunkan dari 1024 ke 512 */}
                 <directionalLight
                     castShadow
                     position={[4.5, 5, 6]}
                     intensity={3.6}
                     color="#fff2d0"
-                    shadow-mapSize-width={1024}
-                    shadow-mapSize-height={1024}
+                    shadow-mapSize-width={512}
+                    shadow-mapSize-height={512}
                 />
 
                 <pointLight
@@ -354,7 +335,6 @@ function LogoScene() {
                     distance={9}
                     color="#ff324f"
                 />
-
                 <pointLight
                     position={[3.2, -2.2, 3.2]}
                     intensity={13}
@@ -382,6 +362,7 @@ function LogoScene() {
                         </Float>
                     </PresentationControls>
 
+                    {/* OPTIMASI: Resolusi ContactShadows diturunkan ke 128 */}
                     <ContactShadows
                         position={[0, -2.08, 0]}
                         opacity={0.58}
@@ -389,11 +370,13 @@ function LogoScene() {
                         blur={3.2}
                         far={5}
                         color="#220305"
+                        resolution={128}
+                        frames={1}
                     />
 
                     {!reduceMotion && (
                         <Sparkles
-                            count={26}
+                            count={20} // Diturunkan sedikit dari 26
                             scale={[4.6, 4.8, 2]}
                             size={1.7}
                             speed={0.24}
@@ -402,7 +385,8 @@ function LogoScene() {
                         />
                     )}
 
-                    <Environment resolution={256}>
+                    {/* OPTIMASI: Resolusi Environment diturunkan ke 128 */}
+                    <Environment resolution={128}>
                         <Lightformer
                             form="rect"
                             intensity={5}
@@ -450,17 +434,12 @@ function StandardPostCard({ post, index }) {
             initial={{ opacity: 0, y: 28 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.14 }}
-            transition={{
-                duration: 0.55,
-                delay: (index % 3) * 0.08,
-            }}
+            transition={{ duration: 0.55, delay: (index % 3) * 0.08 }}
             className="group flex h-full flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-white transition duration-300 hover:-translate-y-1.5 hover:shadow-[0_22px_55px_rgba(15,23,42,.11)]"
         >
             <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
                 <PostImage src={imageUrl} alt={post.title} />
-
                 <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/35 to-transparent" />
-
                 {formattedDate && (
                     <div className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-lg border border-white/40 bg-white/90 px-3 py-2 text-xs font-bold text-slate-700 shadow-sm backdrop-blur-md">
                         <CalendarIcon />
@@ -468,20 +447,16 @@ function StandardPostCard({ post, index }) {
                     </div>
                 )}
             </div>
-
             <div className="flex flex-grow flex-col p-5 sm:p-6">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-red-800">
                     Informasi
                 </p>
-
                 <h3 className="mt-3 line-clamp-2 text-xl font-black leading-snug text-slate-950 transition-colors group-hover:text-red-800">
                     {post.title}
                 </h3>
-
                 <p className="mt-3 line-clamp-3 flex-grow text-sm leading-7 text-slate-600">
                     {post.content}
                 </p>
-
                 <Link
                     href={route("post.show", post.slug)}
                     className="mt-6 inline-flex items-center gap-2 font-bold text-red-800 transition hover:text-red-950"
@@ -516,17 +491,14 @@ export default function Welcome({ posts = [] }) {
                     animate={
                         reduceMotion
                             ? undefined
-                            : {
-                                  x: ["-7%", "7%", "-7%"],
-                                  y: ["0%", "5%", "0%"],
-                              }
+                            : { x: ["-7%", "7%", "-7%"], y: ["0%", "5%", "0%"] }
                     }
                     transition={{
                         duration: 15,
                         repeat: Infinity,
                         ease: "easeInOut",
                     }}
-                    className="absolute -left-52 top-10 h-[560px] w-[560px] rounded-full bg-amber-300/10 blur-[140px]"
+                    className="absolute -left-52 top-10 h-[560px] w-[560px] rounded-full bg-amber-300/10 blur-[64px] md:blur-[140px]"
                 />
 
                 <div
@@ -668,12 +640,10 @@ export default function Welcome({ posts = [] }) {
                             <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-800">
                                 Yang Kami Kerjakan
                             </p>
-
                             <h2 className="mt-3 max-w-xl text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-4xl">
                                 Kegiatan yang dekat dengan pemuda dan warga.
                             </h2>
                         </div>
-
                         <p className="max-w-2xl text-base leading-7 text-slate-600 lg:justify-self-end">
                             Putra Giyanti menjadi tempat pemuda ikut mengambil
                             peran, menyampaikan ide, dan mengerjakan kegiatan
@@ -700,19 +670,15 @@ export default function Welcome({ posts = [] }) {
                                 className="group relative overflow-hidden rounded-[1.5rem] border border-red-900/10 bg-white p-6 shadow-[0_12px_35px_rgba(68,9,14,.06)] transition-shadow hover:shadow-[0_22px_55px_rgba(68,9,14,.12)] sm:p-7"
                             >
                                 <div className="absolute right-0 top-0 h-24 w-24 rounded-bl-full bg-amber-100/70 transition-transform duration-500 group-hover:scale-125" />
-
                                 <div className="relative flex items-center justify-between">
                                     <span className="text-sm font-black text-red-800">
                                         {item.number}
                                     </span>
-
                                     <span className="h-px w-12 bg-red-800/25 transition-all duration-300 group-hover:w-20" />
                                 </div>
-
                                 <h3 className="relative mt-8 text-xl font-black text-slate-950">
                                     {item.title}
                                 </h3>
-
                                 <p className="relative mt-3 leading-7 text-slate-600">
                                     {item.description}
                                 </p>
@@ -739,12 +705,10 @@ export default function Welcome({ posts = [] }) {
                             <p className="text-sm font-bold uppercase tracking-[0.2em] text-red-800">
                                 Kabar Putra Giyanti
                             </p>
-
                             <h2 className="mt-3 text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-4xl">
                                 Kegiatan dan informasi terbaru
                             </h2>
                         </div>
-
                         <p className="max-w-xl leading-7 text-slate-600">
                             Pengumuman, agenda, dan dokumentasi kegiatan terbaru
                             Putra Giyanti.
@@ -784,11 +748,9 @@ export default function Welcome({ posts = [] }) {
                                     />
                                 </svg>
                             </div>
-
                             <p className="mt-5 text-lg font-black text-slate-900">
                                 Belum ada informasi yang dipublikasikan.
                             </p>
-
                             <p className="mt-2 text-sm text-slate-500">
                                 Informasi terbaru akan tampil di bagian ini.
                             </p>
