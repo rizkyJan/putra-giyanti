@@ -206,10 +206,11 @@ function LogoScene() {
                     transition={{ duration: 0.5 }}
                     className="absolute inset-0 flex items-center justify-center"
                 >
+                    {/* UKURAN LOGO DIPERBESAR DI SINI: w-72 untuk HP, sm:w-80 untuk tablet */}
                     <img
                         src="/images/putragiyanti.png"
                         alt="Logo Putra Giyanti"
-                        className="w-56 sm:w-72 object-contain animate-pulse drop-shadow-2xl"
+                        className="w-72 sm:w-80 lg:w-96 object-contain animate-pulse drop-shadow-2xl"
                     />
                 </motion.div>
             ) : (
