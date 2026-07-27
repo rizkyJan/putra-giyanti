@@ -3,8 +3,41 @@ import { Link } from "@inertiajs/react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Float, Html, PresentationControls, useGLTF } from "@react-three/drei";
 import { motion, useReducedMotion } from "motion/react";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+
+// --- 1. ERROR BOUNDARY: PENYELAMAT LAYAR PUTIH ---
+class CanvasErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false };
+    }
+
+    static getDerivedStateFromError(error) {
+        // Jika 3D crash, ubah state menjadi error
+        return { hasError: true };
+    }
+
+    componentDidCatch(error, errorInfo) {
+        console.error("WebGL / 3D Canvas Error ditangkap:", error);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            // JIKA CRASH DI IOS: Tampilkan gambar 2D statis sebagai gantinya
+            return (
+                <div className="flex h-full w-full items-center justify-center drop-shadow-2xl">
+                    <img
+                        src="/images/putragiyanti.png"
+                        alt="Logo Putra Giyanti"
+                        className="w-48 sm:w-64 object-contain animate-pulse"
+                    />
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
 
 const MODEL_URL = "/models/logo-putra-giyanti.glb";
 
@@ -36,7 +69,6 @@ function getPostImageUrl(image) {
     return `/storage/${image}`;
 }
 
-// BUGFIX TANGGAL SUPER AMAN
 function formatPostDate(date) {
     if (!date) return "";
     try {
@@ -146,11 +178,10 @@ function LogoModel({ reduceMotion }) {
 
             if (map) {
                 map.colorSpace = THREE.SRGBColorSpace;
-                map.anisotropy = 1; // Super ringan untuk iOS
+                map.anisotropy = 1;
                 map.needsUpdate = true;
             }
 
-            // iOS SAFE MATERIAL (MeshStandardMaterial tanpa Environment)
             if (materialName.includes("gold")) {
                 object.material = new THREE.MeshStandardMaterial({
                     color: "#f4b73b",
@@ -285,62 +316,67 @@ function LogoScene() {
                 className="absolute inset-[18%] rounded-full border border-dashed border-white/15"
             />
 
-            {/* Bayangan CSS sebagai ganti ContactShadows 3D yang bikin crash */}
             <div className="absolute inset-x-[15%] bottom-[7%] h-16 rounded-full bg-black/50 blur-[30px]" />
 
-            {/* IOS SUPER SAFE CANVAS SETTINGS */}
-            <Canvas
-                shadows={false} // Matikan WebGL shadow sepenuhnya
-                dpr={[1, 1.5]}
-                camera={{ position: [0, 0, 7.4], fov: 31, near: 0.1, far: 50 }}
-                gl={{
-                    alpha: true,
-                    antialias: false,
-                    powerPreference: "low-power", // Paksa Safari untuk tidak over-render
-                    preserveDrawingBuffer: false,
-                }}
-                className="relative z-10 cursor-grab active:cursor-grabbing"
-            >
-                {/* PENCAHAYAAN STANDAR (PENGGANTI ENVIRONMENT) */}
-                <ambientLight intensity={1.5} color="#ffffff" />
-                <directionalLight
-                    position={[5, 8, 5]}
-                    intensity={2.5}
-                    color="#fff2d0"
-                />
-                <directionalLight
-                    position={[-5, -2, -5]}
-                    intensity={1}
-                    color="#ff324f"
-                />
-                <pointLight
-                    position={[0, 2, 4]}
-                    intensity={3}
-                    color="#ffc847"
-                    distance={10}
-                />
+            {/* --- 2. BUNGKUS CANVAS DENGAN ERROR BOUNDARY --- */}
+            <CanvasErrorBoundary>
+                <Canvas
+                    shadows={false}
+                    dpr={[1, 1.2]}
+                    camera={{
+                        position: [0, 0, 7.4],
+                        fov: 31,
+                        near: 0.1,
+                        far: 50,
+                    }}
+                    gl={{
+                        alpha: true,
+                        antialias: false,
+                        powerPreference: "low-power",
+                        preserveDrawingBuffer: false,
+                    }}
+                    className="relative z-10 cursor-grab active:cursor-grabbing"
+                >
+                    <ambientLight intensity={1.5} color="#ffffff" />
+                    <directionalLight
+                        position={[5, 8, 5]}
+                        intensity={2.5}
+                        color="#fff2d0"
+                    />
+                    <directionalLight
+                        position={[-5, -2, -5]}
+                        intensity={1}
+                        color="#ff324f"
+                    />
+                    <pointLight
+                        position={[0, 2, 4]}
+                        intensity={3}
+                        color="#ffc847"
+                        distance={10}
+                    />
 
-                <Suspense fallback={<ModelLoader />}>
-                    <PresentationControls
-                        global
-                        cursor
-                        snap
-                        speed={1}
-                        rotation={[0.02, 0, 0]}
-                        polar={[-0.1, 0.15]}
-                        azimuth={[-0.3, 0.3]}
-                        config={{ mass: 1, tension: 150, friction: 20 }}
-                    >
-                        <Float
-                            speed={reduceMotion ? 0 : 1}
-                            rotationIntensity={reduceMotion ? 0 : 0.05}
-                            floatIntensity={reduceMotion ? 0 : 0.15}
+                    <Suspense fallback={<ModelLoader />}>
+                        <PresentationControls
+                            global
+                            cursor
+                            snap
+                            speed={1}
+                            rotation={[0.02, 0, 0]}
+                            polar={[-0.1, 0.15]}
+                            azimuth={[-0.3, 0.3]}
+                            config={{ mass: 1, tension: 150, friction: 20 }}
                         >
-                            <LogoModel reduceMotion={reduceMotion} />
-                        </Float>
-                    </PresentationControls>
-                </Suspense>
-            </Canvas>
+                            <Float
+                                speed={reduceMotion ? 0 : 1}
+                                rotationIntensity={reduceMotion ? 0 : 0.05}
+                                floatIntensity={reduceMotion ? 0 : 0.15}
+                            >
+                                <LogoModel reduceMotion={reduceMotion} />
+                            </Float>
+                        </PresentationControls>
+                    </Suspense>
+                </Canvas>
+            </CanvasErrorBoundary>
         </motion.div>
     );
 }
@@ -677,6 +713,3 @@ export default function Welcome({ posts = [] }) {
         </LandingPageLayout>
     );
 }
-
-// MEMATIKAN PRELOAD OTOMATIS AGAR IOS TIDAK PANIK DI AWAL RENDER
-// useGLTF.preload(MODEL_URL);
