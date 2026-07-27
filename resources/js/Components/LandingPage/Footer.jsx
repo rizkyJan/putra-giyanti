@@ -61,7 +61,8 @@ export default function Footer() {
 
                     {/* Copyright */}
                     <div className="text-sm text-slate-500">
-                        © {new Date().getFullYear()} Hak Cipta Dilindungi.
+                        © {new Date().getFullYear()} Putra Giyanti App. All
+                        rights reserved.
                     </div>
                 </div>
             </div>
