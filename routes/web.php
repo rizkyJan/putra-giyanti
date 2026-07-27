@@ -13,6 +13,9 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Member\DashboardController as MemberDashboard;
 use App\Http\Controllers\Auth\GoogleAuthController;
 
+Route::get('/panduan', function () {
+    return Inertia::render('Panduan');
+})->name('panduan');
 Route::get('/', [LandingController::class, 'index'])->name('landing');
 Route::get('/informasi/{slug}', [LandingController::class, 'show'])->name('post.show');
 Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('google.login');

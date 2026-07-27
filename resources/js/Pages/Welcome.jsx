@@ -397,11 +397,29 @@ export default function Welcome({ posts = [] }) {
                             </motion.a>
                         </motion.div>
 
+                        {/* TAMBAHAN MENU PANDUAN PENGGUNAAN */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.7, delay: 0.35 }}
+                            className="mt-6 flex justify-center lg:justify-start"
+                        >
+                            <p className="text-sm text-red-50/75">
+                                Baru pertama kali berkunjung?{" "}
+                                <Link
+                                    href={route("panduan")}
+                                    className="font-bold text-amber-300 underline underline-offset-4 transition hover:text-amber-200"
+                                >
+                                    Baca panduan penggunaan
+                                </Link>
+                            </p>
+                        </motion.div>
+
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.7, delay: 0.42 }}
-                            className="mt-10 flex flex-wrap justify-center gap-x-7 gap-y-3 text-sm font-semibold text-red-50/60 lg:justify-start"
+                            className="mt-8 flex flex-wrap justify-center gap-x-7 gap-y-3 text-sm font-semibold text-red-50/60 lg:justify-start"
                         >
                             {[
                                 "Kegiatan pemuda",
