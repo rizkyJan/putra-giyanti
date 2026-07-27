@@ -6,31 +6,23 @@ import { motion, useReducedMotion } from "motion/react";
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
-// --- 1. ERROR BOUNDARY: PENYELAMAT LAYAR PUTIH ---
+// --- ERROR BOUNDARY ---
 class CanvasErrorBoundary extends React.Component {
     constructor(props) {
         super(props);
         this.state = { hasError: false };
     }
-
     static getDerivedStateFromError(error) {
-        // Jika 3D crash, ubah state menjadi error
         return { hasError: true };
     }
-
-    componentDidCatch(error, errorInfo) {
-        console.error("WebGL / 3D Canvas Error ditangkap:", error);
-    }
-
     render() {
         if (this.state.hasError) {
-            // JIKA CRASH DI IOS: Tampilkan gambar 2D statis sebagai gantinya
             return (
-                <div className="flex h-full w-full items-center justify-center drop-shadow-2xl">
+                <div className="absolute inset-0 flex items-center justify-center">
                     <img
                         src="/images/putragiyanti.png"
-                        alt="Logo Putra Giyanti"
-                        className="w-48 sm:w-64 object-contain animate-pulse"
+                        alt="Logo"
+                        className="w-48 sm:w-64 object-contain drop-shadow-2xl"
                     />
                 </div>
             );
@@ -171,7 +163,6 @@ function LogoModel({ reduceMotion }) {
 
         clonedScene.traverse((object) => {
             if (!object.isMesh) return;
-
             const oldMaterial = object.material;
             const materialName = oldMaterial?.name?.toLowerCase() ?? "";
             const map = oldMaterial?.map ?? null;
@@ -270,6 +261,15 @@ function ModelLoader() {
 
 function LogoScene() {
     const reduceMotion = useReducedMotion();
+    const [isIOS, setIsIOS] = useState(false);
+
+    // FITUR CERDAS: Deteksi apakah pengunjung menggunakan iPhone/iPad
+    useEffect(() => {
+        const checkIOS =
+            /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+            (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        setIsIOS(checkIOS);
+    }, []);
 
     return (
         <motion.div
@@ -282,6 +282,7 @@ function LogoScene() {
             }}
             className="relative mx-auto h-[420px] w-full max-w-[620px] sm:h-[520px] lg:h-[610px]"
         >
+            {/* FIX IOS 1: Ganti `blur` dengan `radial-gradient` agar CSS tidak crash saat dianimasi */}
             <motion.div
                 aria-hidden="true"
                 animate={
@@ -297,7 +298,11 @@ function LogoScene() {
                     repeat: Infinity,
                     ease: "easeInOut",
                 }}
-                className="absolute inset-[13%] rounded-full bg-red-400/25 blur-[40px] md:blur-[80px]"
+                className="absolute inset-[13%]"
+                style={{
+                    background:
+                        "radial-gradient(circle, rgba(248,113,113,0.3) 0%, transparent 65%)",
+                }}
             />
 
             <motion.div
@@ -316,67 +321,84 @@ function LogoScene() {
                 className="absolute inset-[18%] rounded-full border border-dashed border-white/15"
             />
 
-            <div className="absolute inset-x-[15%] bottom-[7%] h-16 rounded-full bg-black/50 blur-[30px]" />
+            {/* FIX IOS 2: Ganti bayangan bawah CSS blur dengan gradien ellipse */}
+            <div
+                className="absolute inset-x-[15%] bottom-[7%] h-16"
+                style={{
+                    background:
+                        "radial-gradient(ellipse at center, rgba(0,0,0,0.5) 0%, transparent 70%)",
+                }}
+            />
 
-            {/* --- 2. BUNGKUS CANVAS DENGAN ERROR BOUNDARY --- */}
-            <CanvasErrorBoundary>
-                <Canvas
-                    shadows={false}
-                    dpr={[1, 1.2]}
-                    camera={{
-                        position: [0, 0, 7.4],
-                        fov: 31,
-                        near: 0.1,
-                        far: 50,
-                    }}
-                    gl={{
-                        alpha: true,
-                        antialias: false,
-                        powerPreference: "low-power",
-                        preserveDrawingBuffer: false,
-                    }}
-                    className="relative z-10 cursor-grab active:cursor-grabbing"
-                >
-                    <ambientLight intensity={1.5} color="#ffffff" />
-                    <directionalLight
-                        position={[5, 8, 5]}
-                        intensity={2.5}
-                        color="#fff2d0"
+            {/* FIX IOS 3: Jika pengguna pakai iOS, langsung tampilkan 2D. Jika Android/PC, tampilkan 3D Canvas */}
+            {isIOS ? (
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <img
+                        src="/images/putragiyanti.png"
+                        alt="Logo Putra Giyanti"
+                        className="w-56 sm:w-72 object-contain animate-pulse drop-shadow-2xl"
                     />
-                    <directionalLight
-                        position={[-5, -2, -5]}
-                        intensity={1}
-                        color="#ff324f"
-                    />
-                    <pointLight
-                        position={[0, 2, 4]}
-                        intensity={3}
-                        color="#ffc847"
-                        distance={10}
-                    />
+                </div>
+            ) : (
+                <CanvasErrorBoundary>
+                    <Canvas
+                        shadows={false}
+                        dpr={[1, 1.2]}
+                        camera={{
+                            position: [0, 0, 7.4],
+                            fov: 31,
+                            near: 0.1,
+                            far: 50,
+                        }}
+                        gl={{
+                            alpha: true,
+                            antialias: false,
+                            powerPreference: "low-power",
+                            preserveDrawingBuffer: false,
+                        }}
+                        className="relative z-10 cursor-grab active:cursor-grabbing"
+                    >
+                        <ambientLight intensity={1.5} color="#ffffff" />
+                        <directionalLight
+                            position={[5, 8, 5]}
+                            intensity={2.5}
+                            color="#fff2d0"
+                        />
+                        <directionalLight
+                            position={[-5, -2, -5]}
+                            intensity={1}
+                            color="#ff324f"
+                        />
+                        <pointLight
+                            position={[0, 2, 4]}
+                            intensity={3}
+                            color="#ffc847"
+                            distance={10}
+                        />
 
-                    <Suspense fallback={<ModelLoader />}>
-                        <PresentationControls
-                            global
-                            cursor
-                            snap
-                            speed={1}
-                            rotation={[0.02, 0, 0]}
-                            polar={[-0.1, 0.15]}
-                            azimuth={[-0.3, 0.3]}
-                            config={{ mass: 1, tension: 150, friction: 20 }}
-                        >
-                            <Float
-                                speed={reduceMotion ? 0 : 1}
-                                rotationIntensity={reduceMotion ? 0 : 0.05}
-                                floatIntensity={reduceMotion ? 0 : 0.15}
+                        <Suspense fallback={<ModelLoader />}>
+                            <PresentationControls
+                                global
+                                cursor
+                                snap
+                                speed={1}
+                                rotation={[0.02, 0, 0]}
+                                polar={[-0.1, 0.15]}
+                                azimuth={[-0.3, 0.3]}
+                                config={{ mass: 1, tension: 150, friction: 20 }}
                             >
-                                <LogoModel reduceMotion={reduceMotion} />
-                            </Float>
-                        </PresentationControls>
-                    </Suspense>
-                </Canvas>
-            </CanvasErrorBoundary>
+                                <Float
+                                    speed={reduceMotion ? 0 : 1}
+                                    rotationIntensity={reduceMotion ? 0 : 0.05}
+                                    floatIntensity={reduceMotion ? 0 : 0.15}
+                                >
+                                    <LogoModel reduceMotion={reduceMotion} />
+                                </Float>
+                            </PresentationControls>
+                        </Suspense>
+                    </Canvas>
+                </CanvasErrorBoundary>
+            )}
         </motion.div>
     );
 }
@@ -441,6 +463,7 @@ export default function Welcome({ posts = [] }) {
                     }}
                 />
 
+                {/* FIX IOS 4: Sama seperti sebelumnya, jangan pakai CSS Blur di background ini */}
                 <motion.div
                     aria-hidden="true"
                     animate={
@@ -453,7 +476,11 @@ export default function Welcome({ posts = [] }) {
                         repeat: Infinity,
                         ease: "easeInOut",
                     }}
-                    className="absolute -left-52 top-10 h-[560px] w-[560px] rounded-full bg-amber-300/10 blur-[64px] md:blur-[140px]"
+                    className="absolute -left-52 top-10 h-[560px] w-[560px]"
+                    style={{
+                        background:
+                            "radial-gradient(circle, rgba(253,230,138,0.1) 0%, transparent 70%)",
+                    }}
                 />
 
                 <div
