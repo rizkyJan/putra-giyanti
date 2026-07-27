@@ -112,6 +112,33 @@ export default function Login({ status, canResetPassword }) {
                         {processing ? "Memproses..." : "Masuk ke Dasbor"}
                     </PrimaryButton>
                 </div>
+
+                <div className="mt-6">
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-slate-300"></div>
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                            <span className="px-2 bg-white text-slate-500">
+                                Atau masuk dengan
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="mt-6">
+                        <a
+                            href={route("google.login")}
+                            className="w-full flex items-center justify-center px-4 py-3 border border-slate-300 rounded-xl shadow-sm bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
+                        >
+                            <img
+                                className="h-5 w-5 mr-2"
+                                src="https://www.svgrepo.com/show/475656/google-color.svg"
+                                alt="Google Logo"
+                            />
+                            <span>Lanjutkan dengan Google</span>
+                        </a>
+                    </div>
+                </div>
             </form>
         </GuestLayout>
     );

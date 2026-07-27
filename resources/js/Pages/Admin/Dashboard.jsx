@@ -1,7 +1,7 @@
 import AdminLayout from "@/Layouts/AdminLayout";
 import { Head } from "@inertiajs/react";
 
-export default function Dashboard({ auth }) {
+export default function Dashboard({ auth, stats }) {
     return (
         <AdminLayout user={auth.user}>
             <Head title="Admin Dashboard" />
@@ -37,7 +37,9 @@ export default function Dashboard({ auth }) {
                         <p className="text-sm font-medium text-slate-500">
                             Total Anggota
                         </p>
-                        <h4 className="text-2xl font-bold text-slate-800">0</h4>
+                        <h4 className="text-2xl font-bold text-slate-800">
+                            {stats?.totalAnggota || 0}
+                        </h4>
                     </div>
                 </div>
 
@@ -62,7 +64,9 @@ export default function Dashboard({ auth }) {
                         <p className="text-sm font-medium text-slate-500">
                             Total Rapat
                         </p>
-                        <h4 className="text-2xl font-bold text-slate-800">0</h4>
+                        <h4 className="text-2xl font-bold text-slate-800">
+                            {stats?.totalRapat || 0}
+                        </h4>
                     </div>
                 </div>
 
@@ -87,7 +91,9 @@ export default function Dashboard({ auth }) {
                         <p className="text-sm font-medium text-slate-500">
                             Absensi Bulan Ini
                         </p>
-                        <h4 className="text-2xl font-bold text-slate-800">0</h4>
+                        <h4 className="text-2xl font-bold text-slate-800">
+                            {stats?.totalAbsensi || 0}
+                        </h4>
                     </div>
                 </div>
             </div>

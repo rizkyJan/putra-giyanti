@@ -9,19 +9,21 @@ use App\Http\Controllers\Admin\MeetingController;
 use App\Http\Controllers\Admin\AttendancesController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\Admin\PostController;
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Member\DashboardController as MemberDashboard;
+use App\Http\Controllers\Auth\GoogleAuthController;
 
 Route::get('/', [LandingController::class, 'index'])->name('landing');
 Route::get('/informasi/{slug}', [LandingController::class, 'show'])->name('post.show');
+Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('google.login');
+Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('google.callback');
 
 // ==========================================
 // AREA ADMIN (Hanya bisa diakses role 'admin')
 // ==========================================
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->group(function () {
 
-    Route::get('/dashboard', function () {
-        return Inertia::render('Admin/Dashboard');
-    })->name('dashboard');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     // CRUD Controllers
     Route::resource('users', UserController::class)->except(['show']);

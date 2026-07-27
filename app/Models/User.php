@@ -25,6 +25,7 @@ class User extends Authenticatable
         'whatsapp_number', // Tambahkan ini
         'role',            // Tambahkan ini
         'is_active',
+        'google_id'
     ];
 
     /**
