@@ -338,7 +338,7 @@ export default function Welcome({ posts = [] }) {
                             className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.08] px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-amber-100 backdrop-blur-md"
                         >
                             <span className="h-2 w-2 rounded-full bg-amber-300 shadow-[0_0_14px_rgba(253,224,71,.9)]" />{" "}
-                            Karang Taruna Desa Giyanti
+                            Karang Taruna Desa Janti
                         </motion.div>
 
                         <motion.h1
