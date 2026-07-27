@@ -1,16 +1,7 @@
 import LandingPageLayout from "@/Layouts/LandingPageLayout";
 import { Link } from "@inertiajs/react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import {
-    ContactShadows,
-    Environment,
-    Float,
-    Html,
-    Lightformer,
-    PresentationControls,
-    Sparkles,
-    useGLTF,
-} from "@react-three/drei";
+import { Float, Html, PresentationControls, useGLTF } from "@react-three/drei";
 import { motion, useReducedMotion } from "motion/react";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -45,17 +36,23 @@ function getPostImageUrl(image) {
     return `/storage/${image}`;
 }
 
+// BUGFIX TANGGAL SUPER AMAN
 function formatPostDate(date) {
     if (!date) return "";
-    const safeDate = typeof date === "string" ? date.replace(/-/g, "/") : date;
-    const parsedDate = new Date(safeDate);
-    if (Number.isNaN(parsedDate.getTime())) return "";
+    try {
+        const safeDate =
+            typeof date === "string" ? date.replace(/-/g, "/") : date;
+        const parsedDate = new Date(safeDate);
+        if (Number.isNaN(parsedDate.getTime())) return "";
 
-    return new Intl.DateTimeFormat("id-ID", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-    }).format(parsedDate);
+        return new Intl.DateTimeFormat("id-ID", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        }).format(parsedDate);
+    } catch (e) {
+        return "";
+    }
 }
 
 function ArrowIcon({ className = "h-4 w-4" }) {
@@ -119,11 +116,7 @@ function ImagePlaceholder() {
 
 function PostImage({ src, alt, className = "" }) {
     const [failed, setFailed] = useState(false);
-
-    if (!src || failed) {
-        return <ImagePlaceholder />;
-    }
-
+    if (!src || failed) return <ImagePlaceholder />;
     return (
         <img
             src={src}
@@ -141,13 +134,11 @@ function LogoModel({ reduceMotion }) {
     const { scene: originalScene } = useGLTF(MODEL_URL);
 
     const scene = useMemo(() => {
+        if (!originalScene) return new THREE.Scene();
         const clonedScene = originalScene.clone(true);
 
         clonedScene.traverse((object) => {
             if (!object.isMesh) return;
-
-            object.castShadow = true;
-            object.receiveShadow = true;
 
             const oldMaterial = object.material;
             const materialName = oldMaterial?.name?.toLowerCase() ?? "";
@@ -155,17 +146,16 @@ function LogoModel({ reduceMotion }) {
 
             if (map) {
                 map.colorSpace = THREE.SRGBColorSpace;
-                map.anisotropy = 4; // Diturunkan dari 8 agar lebih ringan
+                map.anisotropy = 1; // Super ringan untuk iOS
                 map.needsUpdate = true;
             }
 
-            // OPTIMASI: Ganti MeshPhysicalMaterial ke MeshStandardMaterial yang jauh lebih ringan
+            // iOS SAFE MATERIAL (MeshStandardMaterial tanpa Environment)
             if (materialName.includes("gold")) {
                 object.material = new THREE.MeshStandardMaterial({
-                    color: "#f2aa20",
-                    metalness: 0.85,
-                    roughness: 0.18,
-                    envMapIntensity: 2.0,
+                    color: "#f4b73b",
+                    metalness: 0.6,
+                    roughness: 0.3,
                 });
                 return;
             }
@@ -177,9 +167,8 @@ function LogoModel({ reduceMotion }) {
             ) {
                 object.material = new THREE.MeshStandardMaterial({
                     color: "#52070c",
-                    metalness: 0.35,
-                    roughness: 0.25,
-                    envMapIntensity: 1.5,
+                    metalness: 0.2,
+                    roughness: 0.4,
                 });
                 return;
             }
@@ -192,8 +181,7 @@ function LogoModel({ reduceMotion }) {
                 alphaTest: oldMaterial?.alphaTest ?? 0,
                 side: oldMaterial?.side ?? THREE.FrontSide,
                 metalness: 0.1,
-                roughness: 0.2,
-                envMapIntensity: 2.0,
+                roughness: 0.3,
             });
         });
 
@@ -211,7 +199,6 @@ function LogoModel({ reduceMotion }) {
 
     useFrame((state, delta) => {
         if (!group.current || reduceMotion) return;
-
         const time = state.clock.getElapsedTime();
         const targetRotationY =
             state.pointer.x * 0.15 + Math.sin(time * 0.52) * 0.035;
@@ -298,48 +285,39 @@ function LogoScene() {
                 className="absolute inset-[18%] rounded-full border border-dashed border-white/15"
             />
 
-            <div className="absolute inset-x-[15%] bottom-[7%] h-16 rounded-full bg-black/40 blur-3xl" />
+            {/* Bayangan CSS sebagai ganti ContactShadows 3D yang bikin crash */}
+            <div className="absolute inset-x-[15%] bottom-[7%] h-16 rounded-full bg-black/50 blur-[30px]" />
 
-            {/* OPTIMASI: Batasi DPR menjadi 1.2 dan Matikan antialias agar HP tidak panas/ngelag */}
+            {/* IOS SUPER SAFE CANVAS SETTINGS */}
             <Canvas
-                shadows
-                dpr={[1, 1.2]}
+                shadows={false} // Matikan WebGL shadow sepenuhnya
+                dpr={[1, 1.5]}
                 camera={{ position: [0, 0, 7.4], fov: 31, near: 0.1, far: 50 }}
                 gl={{
                     alpha: true,
-                    antialias: false, // Dimatikan untuk mendongkrak FPS di HP
-                    powerPreference: "default",
-                }}
-                onCreated={({ gl }) => {
-                    gl.outputColorSpace = THREE.SRGBColorSpace;
-                    gl.toneMapping = THREE.ACESFilmicToneMapping;
-                    gl.toneMappingExposure = 1.18;
+                    antialias: false,
+                    powerPreference: "low-power", // Paksa Safari untuk tidak over-render
+                    preserveDrawingBuffer: false,
                 }}
                 className="relative z-10 cursor-grab active:cursor-grabbing"
             >
-                <ambientLight intensity={0.72} />
-
-                {/* OPTIMASI: Resolusi bayangan diturunkan dari 1024 ke 512 */}
+                {/* PENCAHAYAAN STANDAR (PENGGANTI ENVIRONMENT) */}
+                <ambientLight intensity={1.5} color="#ffffff" />
                 <directionalLight
-                    castShadow
-                    position={[4.5, 5, 6]}
-                    intensity={3.6}
+                    position={[5, 8, 5]}
+                    intensity={2.5}
                     color="#fff2d0"
-                    shadow-mapSize-width={512}
-                    shadow-mapSize-height={512}
                 />
-
-                <pointLight
-                    position={[-3.5, 0.4, 4]}
-                    intensity={18}
-                    distance={9}
+                <directionalLight
+                    position={[-5, -2, -5]}
+                    intensity={1}
                     color="#ff324f"
                 />
                 <pointLight
-                    position={[3.2, -2.2, 3.2]}
-                    intensity={13}
-                    distance={8}
+                    position={[0, 2, 4]}
+                    intensity={3}
                     color="#ffc847"
+                    distance={10}
                 />
 
                 <Suspense fallback={<ModelLoader />}>
@@ -347,78 +325,20 @@ function LogoScene() {
                         global
                         cursor
                         snap
-                        speed={1.05}
+                        speed={1}
                         rotation={[0.02, 0, 0]}
-                        polar={[-0.15, 0.18]}
-                        azimuth={[-0.42, 0.42]}
-                        config={{ mass: 1, tension: 190, friction: 24 }}
+                        polar={[-0.1, 0.15]}
+                        azimuth={[-0.3, 0.3]}
+                        config={{ mass: 1, tension: 150, friction: 20 }}
                     >
                         <Float
-                            speed={reduceMotion ? 0 : 1.25}
-                            rotationIntensity={reduceMotion ? 0 : 0.06}
-                            floatIntensity={reduceMotion ? 0 : 0.22}
+                            speed={reduceMotion ? 0 : 1}
+                            rotationIntensity={reduceMotion ? 0 : 0.05}
+                            floatIntensity={reduceMotion ? 0 : 0.15}
                         >
                             <LogoModel reduceMotion={reduceMotion} />
                         </Float>
                     </PresentationControls>
-
-                    {/* OPTIMASI: Resolusi ContactShadows diturunkan ke 128 */}
-                    <ContactShadows
-                        position={[0, -2.08, 0]}
-                        opacity={0.58}
-                        scale={6.5}
-                        blur={3.2}
-                        far={5}
-                        color="#220305"
-                        resolution={128}
-                        frames={1}
-                    />
-
-                    {!reduceMotion && (
-                        <Sparkles
-                            count={20} // Diturunkan sedikit dari 26
-                            scale={[4.6, 4.8, 2]}
-                            size={1.7}
-                            speed={0.24}
-                            opacity={0.42}
-                            color="#ffd76a"
-                        />
-                    )}
-
-                    {/* OPTIMASI: Resolusi Environment diturunkan ke 128 */}
-                    <Environment resolution={128}>
-                        <Lightformer
-                            form="rect"
-                            intensity={5}
-                            color="#fff4d6"
-                            position={[0, 4, 5]}
-                            rotation={[0, 0, 0]}
-                            scale={[5, 1.4, 1]}
-                        />
-                        <Lightformer
-                            form="rect"
-                            intensity={3.2}
-                            color="#ff3356"
-                            position={[-4, 0, 3]}
-                            rotation={[0, Math.PI / 2, 0]}
-                            scale={[4, 2, 1]}
-                        />
-                        <Lightformer
-                            form="rect"
-                            intensity={4}
-                            color="#ffc64f"
-                            position={[4, -1, 2]}
-                            rotation={[0, -Math.PI / 2, 0]}
-                            scale={[3, 2, 1]}
-                        />
-                        <Lightformer
-                            form="ring"
-                            intensity={2.5}
-                            color="#ffffff"
-                            position={[0, 0, -4]}
-                            scale={[3, 3, 1]}
-                        />
-                    </Environment>
                 </Suspense>
             </Canvas>
         </motion.div>
@@ -461,8 +381,7 @@ function StandardPostCard({ post, index }) {
                     href={route("post.show", post.slug)}
                     className="mt-6 inline-flex items-center gap-2 font-bold text-red-800 transition hover:text-red-950"
                 >
-                    Baca selengkapnya
-                    <ArrowIcon />
+                    Baca selengkapnya <ArrowIcon />
                 </Link>
             </div>
         </motion.article>
@@ -565,10 +484,8 @@ export default function Welcome({ posts = [] }) {
                                 }
                                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-300 px-6 py-3.5 font-black text-red-950 shadow-[0_14px_38px_rgba(251,191,36,.2)] transition hover:bg-amber-200"
                             >
-                                Lihat kegiatan
-                                <ArrowIcon />
+                                Lihat kegiatan <ArrowIcon />
                             </motion.a>
-
                             <motion.a
                                 href="#program"
                                 whileHover={
@@ -604,7 +521,6 @@ export default function Welcome({ posts = [] }) {
                             ))}
                         </motion.div>
                     </div>
-
                     <div className="order-1 lg:order-2">
                         <LogoScene />
                     </div>
@@ -762,4 +678,5 @@ export default function Welcome({ posts = [] }) {
     );
 }
 
-useGLTF.preload(MODEL_URL);
+// MEMATIKAN PRELOAD OTOMATIS AGAR IOS TIDAK PANIK DI AWAL RENDER
+// useGLTF.preload(MODEL_URL);
