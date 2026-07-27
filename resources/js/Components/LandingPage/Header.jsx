@@ -44,7 +44,7 @@ export default function Header() {
                         </a>
                         <Link
                             href={route("login")}
-                            className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-200"
+                            className="px-5 py-2.5 bg-[#7B0E16] text-white rounded-xl font-semibold hover:bg-[#5B090F] transition-all shadow-sm shadow-red-900/20"
                         >
                             Masuk Sistem
                         </Link>
@@ -103,7 +103,7 @@ export default function Header() {
                         <div className="pt-4 border-t border-slate-100 mt-2">
                             <Link
                                 href={route("login")}
-                                className="block w-full text-center px-5 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700"
+                                className="block w-full text-center px-5 py-3 bg-[#7B0E16] text-white rounded-xl font-semibold hover:bg-[#5B090F] transition-colors"
                             >
                                 Masuk Sistem
                             </Link>

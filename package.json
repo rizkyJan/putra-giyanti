@@ -22,10 +22,14 @@
         "vite": "^8.0.0"
     },
     "dependencies": {
+        "@react-three/drei": "9.122.0",
+        "@react-three/fiber": "8.18.0",
         "@yudiel/react-qr-scanner": "^2.6.0",
         "axios": "^1.18.1",
         "dayjs": "^1.11.21",
         "html5-qrcode": "^2.3.8",
-        "sweetalert2": "^11.26.25"
+        "motion": "^12.42.2",
+        "sweetalert2": "^11.26.25",
+        "three": "^0.185.1"
     }
 }
