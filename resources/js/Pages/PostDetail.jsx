@@ -44,11 +44,12 @@ export default function PostDetail({ post }) {
 
                     {/* Gambar Artikel (Jika Ada) */}
                     {post.image && (
-                        <div className="w-full bg-slate-100">
+                        <div className="w-full bg-[#f8fafc] flex justify-center border-b border-slate-100">
                             <img
                                 src={`/storage/${post.image}`}
                                 alt={post.title}
-                                className="w-full max-h-[500px] object-cover"
+                                /* object-contain akan memastikan gambar utuh tidak di-crop */
+                                className="w-full max-h-[600px] object-contain"
                             />
                         </div>
                     )}
