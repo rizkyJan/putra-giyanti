@@ -1,5 +1,6 @@
 import LandingPageLayout from "@/Layouts/LandingPageLayout";
 import { Link } from "@inertiajs/react";
+import ReactMarkdown from "react-markdown";
 
 export default function PostDetail({ post }) {
     return (
@@ -54,8 +55,8 @@ export default function PostDetail({ post }) {
 
                     {/* Isi Konten Artikel */}
                     <div className="p-8 md:p-12 bg-white">
-                        <div className="prose prose-lg prose-indigo max-w-none text-slate-600 leading-relaxed whitespace-pre-wrap">
-                            {post.content}
+                        <div className="prose prose-lg prose-indigo max-w-none text-slate-600 leading-relaxed">
+                            <ReactMarkdown>{post.content}</ReactMarkdown>
                         </div>
                     </div>
                 </article>
