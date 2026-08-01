@@ -239,7 +239,13 @@ function LogoScene() {
 }
 
 function StandardPostCard({ post, index }) {
-    const imageUrl = getPostImageUrl(post.image);
+    // Penyesuaian pengecekan gambar: Ambil gambar single, atau gambar pertama dari array jika dokumentasi
+    let rawImage = post.image;
+    if (post.type === "dokumentasi" && post.images && post.images.length > 0) {
+        rawImage = post.images[0];
+    }
+
+    const imageUrl = getPostImageUrl(rawImage);
     const formattedDate = formatPostDate(post.created_at);
 
     return (
@@ -262,7 +268,8 @@ function StandardPostCard({ post, index }) {
             </div>
             <div className="flex flex-grow flex-col p-5 sm:p-6">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-red-800">
-                    Informasi
+                    {/* Membuat label tipe dinamis */}
+                    {post.type === "dokumentasi" ? "Dokumentasi" : "Informasi"}
                 </p>
                 <h3 className="mt-3 line-clamp-2 text-xl font-black leading-snug text-slate-950 transition-colors group-hover:text-red-800">
                     {post.title}

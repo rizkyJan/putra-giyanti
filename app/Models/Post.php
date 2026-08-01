@@ -15,6 +15,12 @@ class Post extends Model
         'slug',
         'image',
         'content',
-        'status'
+        'status',
+        'type',
+        'images'
+    ];
+
+    protected $casts = [
+        'images' => 'array', // Ini akan otomatis mengubah Array ke JSON di Database
     ];
 }

@@ -4,8 +4,10 @@ import { Head, Link, useForm } from "@inertiajs/react";
 export default function Create({ auth }) {
     const { data, setData, post, processing, errors } = useForm({
         title: "",
+        type: "informasi",
         content: "",
         image: null,
+        images: [],
         status: "publish",
     });
 
@@ -16,11 +18,11 @@ export default function Create({ auth }) {
 
     return (
         <AdminLayout user={auth.user}>
-            <Head title="Tambah Informasi" />
+            <Head title="Tambah Data" />
 
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-2xl font-bold text-slate-800">
-                    Tambah Informasi
+                    Tambah Data Baru
                 </h3>
                 <Link
                     href={route("admin.posts.index")}
@@ -35,14 +37,14 @@ export default function Create({ auth }) {
                     {/* Judul */}
                     <div>
                         <label className="block text-sm font-bold text-slate-700 mb-2">
-                            Judul Informasi / Acara
+                            Judul
                         </label>
                         <input
                             type="text"
                             value={data.title}
                             onChange={(e) => setData("title", e.target.value)}
                             className="w-full rounded-xl border-slate-300 focus:border-indigo-500 focus:ring focus:ring-indigo-200 transition-shadow"
-                            placeholder="Contoh: Jadwal Jalan Sehat Agustus 2026"
+                            placeholder="Contoh: Jadwal Jalan Sehat / Dokumentasi 17an"
                         />
                         {errors.title && (
                             <p className="text-rose-500 text-sm mt-1">
@@ -51,40 +53,93 @@ export default function Create({ auth }) {
                         )}
                     </div>
 
-                    {/* Gambar */}
+                    {/* Tipe Post */}
                     <div>
                         <label className="block text-sm font-bold text-slate-700 mb-2">
-                            Poster / Gambar Utama (Opsional)
+                            Jenis Postingan
                         </label>
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) =>
-                                setData("image", e.target.files[0])
-                            }
-                            className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition cursor-pointer"
-                        />
-                        {errors.image && (
-                            <p className="text-rose-500 text-sm mt-1">
-                                {errors.image}
-                            </p>
-                        )}
-                        <p className="text-xs text-slate-400 mt-2">
-                            Format yang didukung: JPG, PNG, GIF. Maksimal 2MB.
-                        </p>
+                        <select
+                            value={data.type}
+                            onChange={(e) => {
+                                setData("type", e.target.value);
+                                // Reset file saat ganti tipe
+                                setData("image", null);
+                                setData("images", []);
+                            }}
+                            className="w-full rounded-xl border-slate-300 focus:border-indigo-500 focus:ring focus:ring-indigo-200 transition-shadow bg-slate-50"
+                        >
+                            <option value="informasi">
+                                Informasi (1 Poster/Gambar)
+                            </option>
+                            <option value="dokumentasi">
+                                Dokumentasi (Banyak Gambar Galeri)
+                            </option>
+                        </select>
                     </div>
+
+                    {/* Input Gambar (Dinamis berdasarkan Tipe) */}
+                    {data.type === "informasi" ? (
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">
+                                Poster Utama
+                            </label>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) =>
+                                    setData("image", e.target.files[0])
+                                }
+                                className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                            />
+                            <p className="text-xs text-slate-400 mt-2">
+                                Pilih 1 gambar saja.
+                            </p>
+                            {errors.image && (
+                                <p className="text-rose-500 text-sm mt-1">
+                                    {errors.image}
+                                </p>
+                            )}
+                        </div>
+                    ) : (
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">
+                                Gambar Dokumentasi (Bisa Pilih Banyak)
+                            </label>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={(e) =>
+                                    setData(
+                                        "images",
+                                        Array.from(e.target.files),
+                                    )
+                                }
+                                className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
+                            />
+                            <p className="text-xs text-slate-400 mt-2">
+                                Blok/Pilih banyak gambar sekaligus di
+                                komputermu.
+                            </p>
+                            {errors.images && (
+                                <p className="text-rose-500 text-sm mt-1">
+                                    {errors.images}
+                                </p>
+                            )}
+                        </div>
+                    )}
 
                     {/* Konten */}
                     <div>
                         <label className="block text-sm font-bold text-slate-700 mb-2">
-                            Isi Detail Informasi
+                            Isi Detail / Keterangan
                         </label>
                         <textarea
                             rows="6"
                             value={data.content}
                             onChange={(e) => setData("content", e.target.value)}
                             className="w-full rounded-xl border-slate-300 focus:border-indigo-500 focus:ring focus:ring-indigo-200 transition-shadow resize-y"
-                            placeholder="Tuliskan isi berita, detail acara, lokasi, atau informasi penting lainnya..."
+                            placeholder="Tuliskan keterangan..."
                         ></textarea>
                         {errors.content && (
                             <p className="text-rose-500 text-sm mt-1">
@@ -101,30 +156,20 @@ export default function Create({ auth }) {
                         <select
                             value={data.status}
                             onChange={(e) => setData("status", e.target.value)}
-                            className="w-full sm:w-1/3 rounded-xl border-slate-300 focus:border-indigo-500 focus:ring focus:ring-indigo-200 transition-shadow bg-slate-50"
+                            className="w-full sm:w-1/3 rounded-xl border-slate-300 focus:border-indigo-500 transition-shadow bg-slate-50"
                         >
-                            <option value="publish">
-                                Publish (Tampil di Website)
-                            </option>
-                            <option value="draft">
-                                Draft (Sembunyikan Sementara)
-                            </option>
+                            <option value="publish">Publish</option>
+                            <option value="draft">Draft</option>
                         </select>
-                        {errors.status && (
-                            <p className="text-rose-500 text-sm mt-1">
-                                {errors.status}
-                            </p>
-                        )}
                     </div>
 
-                    {/* Submit Button */}
                     <div className="pt-4 border-t border-slate-100">
                         <button
                             type="submit"
                             disabled={processing}
-                            className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-sm shadow-indigo-200 disabled:opacity-70 disabled:cursor-not-allowed w-full sm:w-auto"
+                            className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-sm w-full sm:w-auto"
                         >
-                            {processing ? "Menyimpan..." : "Simpan Informasi"}
+                            {processing ? "Menyimpan..." : "Simpan Data"}
                         </button>
                     </div>
                 </form>
