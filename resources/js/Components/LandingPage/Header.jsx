@@ -22,7 +22,7 @@ export default function Header() {
                             />
 
                             {/* Teks Brand */}
-                            <span className="font-extrabold text-xl text-slate-800 tracking-tight group-hover:text-indigo-700 transition-colors duration-300">
+                            <span className="font-extrabold text-xl text-slate-800 tracking-tight group-hover:text-red-900 transition-colors duration-300">
                                 PUTRA GIYANTI
                             </span>
                         </Link>
@@ -32,16 +32,24 @@ export default function Header() {
                     <nav className="hidden md:flex space-x-8 items-center">
                         <Link
                             href="/"
-                            className="text-slate-600 hover:text-indigo-600 font-medium transition-colors"
+                            className="text-slate-600 hover:text-red-800 font-medium transition-colors"
                         >
                             Beranda
                         </Link>
                         <a
                             href="/#informasi"
-                            className="text-slate-600 hover:text-indigo-600 font-medium transition-colors"
+                            className="text-slate-600 hover:text-red-800 font-medium transition-colors"
                         >
                             Informasi & Kegiatan
                         </a>
+                        {/* TAMBAHAN MENU SUSUNAN PENGURUS */}
+                        <Link
+                            href={route("pengurus")}
+                            className="text-slate-600 hover:text-red-800 font-medium transition-colors"
+                        >
+                            Susunan Pengurus
+                        </Link>
+
                         <Link
                             href={route("login")}
                             className="px-5 py-2.5 bg-[#7B0E16] text-white rounded-xl font-semibold hover:bg-[#5B090F] transition-all shadow-sm shadow-red-900/20"
@@ -100,6 +108,15 @@ export default function Header() {
                         >
                             Informasi & Kegiatan
                         </a>
+                        {/* TAMBAHAN MENU SUSUNAN PENGURUS MOBILE */}
+                        <Link
+                            href={route("pengurus")}
+                            onClick={() => setIsOpen(false)}
+                            className="block px-3 py-3 rounded-lg text-base font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                            Susunan Pengurus
+                        </Link>
+
                         <div className="pt-4 border-t border-slate-100 mt-2">
                             <Link
                                 href={route("login")}

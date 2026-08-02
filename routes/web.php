@@ -16,6 +16,9 @@ use App\Http\Controllers\Auth\GoogleAuthController;
 Route::get('/panduan', function () {
     return Inertia::render('Panduan');
 })->name('panduan');
+Route::get('/pengurus', function () {
+    return Inertia::render('Pengurus');
+})->name('pengurus');
 Route::get('/', [LandingController::class, 'index'])->name('landing');
 Route::get('/informasi/{slug}', [LandingController::class, 'show'])->name('post.show');
 Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('google.login');
