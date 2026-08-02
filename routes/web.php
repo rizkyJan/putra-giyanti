@@ -36,6 +36,8 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::patch('/users/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('users.toggle-status');
     Route::resource('meetings', MeetingController::class);
     Route::post('/meetings/{meeting}/start', [MeetingController::class, 'startMeeting'])->name('meetings.start');
+    Route::post('/meetings/{meeting}/end', [MeetingController::class, 'endMeeting'])->name('meetings.end');
+    Route::post('/meetings/{meeting}/resume', [MeetingController::class, 'resumeMeeting'])->name('meetings.resume');
     Route::post('/attendances/scan', [MeetingController::class, 'scan'])->name('attendances.scan');
 
     Route::get('/attendances', [AttendancesController::class, 'index'])->name('attendances.index');

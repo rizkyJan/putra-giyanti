@@ -11,17 +11,20 @@ export default function Index({ auth, meetings }) {
     const [activeMeeting, setActiveMeeting] = useState(null);
     const [scanResult, setScanResult] = useState({ type: null, message: null });
 
-    // State untuk Pop-up Hapus Rapat
+    // State untuk Modal Hapus, Mulai, Akhiri, dan Buka Lagi
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [meetingToDelete, setMeetingToDelete] = useState(null);
 
-    // State untuk Pop-up Mulai Rapat
     const [showStartModal, setShowStartModal] = useState(false);
     const [meetingToStart, setMeetingToStart] = useState(null);
 
-    // ==========================================
-    // FUNGSI UNTUK HAPUS RAPAT
-    // ==========================================
+    const [showEndModal, setShowEndModal] = useState(false);
+    const [meetingToEnd, setMeetingToEnd] = useState(null);
+
+    const [showResumeModal, setShowResumeModal] = useState(false);
+    const [meetingToResume, setMeetingToResume] = useState(null);
+
+    // ================== HAPUS RAPAT ==================
     const handleDeleteClick = (id) => {
         setMeetingToDelete(id);
         setShowDeleteModal(true);
@@ -39,9 +42,7 @@ export default function Index({ auth, meetings }) {
         }
     };
 
-    // ==========================================
-    // FUNGSI UNTUK MULAI RAPAT
-    // ==========================================
+    // ================== MULAI RAPAT ==================
     const handleStartClick = (id) => {
         setMeetingToStart(id);
         setShowStartModal(true);
@@ -63,9 +64,51 @@ export default function Index({ auth, meetings }) {
         }
     };
 
-    // ==========================================
-    // FUNGSI UNTUK SCANNER
-    // ==========================================
+    // ================== AKHIRI RAPAT ==================
+    const handleEndClick = (id) => {
+        setMeetingToEnd(id);
+        setShowEndModal(true);
+    };
+
+    const confirmEnd = () => {
+        if (meetingToEnd) {
+            router.post(
+                route("admin.meetings.end", meetingToEnd),
+                {},
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setShowEndModal(false);
+                        setMeetingToEnd(null);
+                    },
+                },
+            );
+        }
+    };
+
+    // ================== BUKA LAGI RAPAT ==================
+    const handleResumeClick = (id) => {
+        setMeetingToResume(id);
+        setShowResumeModal(true);
+    };
+
+    const confirmResume = () => {
+        if (meetingToResume) {
+            router.post(
+                route("admin.meetings.resume", meetingToResume),
+                {},
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setShowResumeModal(false);
+                        setMeetingToResume(null);
+                    },
+                },
+            );
+        }
+    };
+
+    // ================== SCANNER ==================
     const handleOpenScanner = (meeting) => {
         setActiveMeeting(meeting);
         setShowScanner(true);
@@ -79,7 +122,7 @@ export default function Index({ auth, meetings }) {
             )();
             const oscillator = audioCtx.createOscillator();
             oscillator.type = "sine";
-            oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); // 800Hz
+            oscillator.frequency.setValueAtTime(800, audioCtx.currentTime);
             oscillator.connect(audioCtx.destination);
             oscillator.start();
             oscillator.stop(audioCtx.currentTime + 0.15);
@@ -104,7 +147,7 @@ export default function Index({ auth, meetings }) {
                 </Link>
             </div>
 
-            {/* Notifikasi halaman utama */}
+            {/* Notifikasi */}
             {!showScanner && flash?.success && (
                 <div className="mb-4 p-4 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl font-medium">
                     {flash.success}
@@ -128,7 +171,7 @@ export default function Index({ auth, meetings }) {
                                     Waktu Pelaksanaan
                                 </th>
                                 <th className="p-4 font-semibold">Status</th>
-                                <th className="p-4 font-semibold text-center">
+                                <th className="p-4 font-semibold text-center w-[280px]">
                                     Aksi
                                 </th>
                             </tr>
@@ -175,57 +218,93 @@ export default function Index({ auth, meetings }) {
                                                 </span>
                                             )}
                                             {meeting.status === "completed" && (
-                                                <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-bold uppercase border border-indigo-200">
+                                                <span className="px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-xs font-bold uppercase border border-rose-200">
                                                     Selesai
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="p-4 flex justify-center gap-2 items-center flex-wrap max-w-[250px] mx-auto">
-                                            {meeting.status === "scheduled" && (
-                                                <button
-                                                    onClick={() =>
-                                                        handleStartClick(
-                                                            meeting.id,
-                                                        )
-                                                    }
-                                                    className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition w-full mb-1 shadow-sm"
-                                                >
-                                                    🚀 Mulai Rapat
-                                                </button>
-                                            )}
-
-                                            {meeting.status === "ongoing" && (
-                                                <button
-                                                    onClick={() =>
-                                                        handleOpenScanner(
-                                                            meeting,
-                                                        )
-                                                    }
-                                                    className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm font-semibold hover:bg-emerald-600 transition w-full mb-1 flex justify-center items-center gap-1 shadow-sm"
-                                                >
-                                                    📷 Buka Scanner
-                                                </button>
-                                            )}
-
-                                            <Link
-                                                href={route(
-                                                    "admin.meetings.edit",
-                                                    meeting.id,
+                                        <td className="p-4">
+                                            <div className="flex flex-col gap-1.5 w-full">
+                                                {/* ================= AKSI SCHEDULED ================= */}
+                                                {meeting.status ===
+                                                    "scheduled" && (
+                                                    <button
+                                                        onClick={() =>
+                                                            handleStartClick(
+                                                                meeting.id,
+                                                            )
+                                                        }
+                                                        className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition w-full shadow-sm"
+                                                    >
+                                                        🚀 Mulai Rapat
+                                                    </button>
                                                 )}
-                                                className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-sm font-semibold hover:bg-amber-200 transition flex-1 text-center"
-                                            >
-                                                Edit
-                                            </Link>
-                                            <button
-                                                onClick={() =>
-                                                    handleDeleteClick(
-                                                        meeting.id,
-                                                    )
-                                                }
-                                                className="px-3 py-1.5 bg-rose-100 text-rose-700 rounded-lg text-sm font-semibold hover:bg-rose-200 transition flex-1"
-                                            >
-                                                Hapus
-                                            </button>
+
+                                                {/* ================= AKSI ONGOING ================= */}
+                                                {meeting.status ===
+                                                    "ongoing" && (
+                                                    <>
+                                                        <button
+                                                            onClick={() =>
+                                                                handleOpenScanner(
+                                                                    meeting,
+                                                                )
+                                                            }
+                                                            className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm font-semibold hover:bg-emerald-600 transition w-full flex justify-center items-center gap-1 shadow-sm"
+                                                        >
+                                                            📷 Buka Scanner
+                                                        </button>
+                                                        <button
+                                                            onClick={() =>
+                                                                handleEndClick(
+                                                                    meeting.id,
+                                                                )
+                                                            }
+                                                            className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition w-full shadow-sm"
+                                                        >
+                                                            ⏹️ Akhiri Rapat
+                                                        </button>
+                                                    </>
+                                                )}
+
+                                                {/* ================= AKSI COMPLETED ================= */}
+                                                {meeting.status ===
+                                                    "completed" && (
+                                                    <button
+                                                        onClick={() =>
+                                                            handleResumeClick(
+                                                                meeting.id,
+                                                            )
+                                                        }
+                                                        className="px-3 py-1.5 bg-cyan-600 text-white rounded-lg text-sm font-semibold hover:bg-cyan-700 transition w-full shadow-sm"
+                                                    >
+                                                        🔓 Buka Lagi Absensi
+                                                    </button>
+                                                )}
+
+                                                {/* Tombol Edit & Hapus (Selalu ada) */}
+                                                <div className="flex gap-1.5 mt-1">
+                                                    <Link
+                                                        href={route(
+                                                            "admin.meetings.edit",
+                                                            meeting.id,
+                                                        )}
+                                                        className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-sm font-semibold hover:bg-amber-200 transition flex-1 text-center"
+                                                    >
+                                                        Edit
+                                                    </Link>
+                                                    <button
+                                                        onClick={() =>
+                                                            handleDeleteClick(
+                                                                meeting.id,
+                                                            )
+                                                        }
+                                                        className="px-3 py-1.5 bg-rose-100 text-rose-700 rounded-lg text-sm font-semibold hover:bg-rose-200 transition flex-1"
+                                                    >
+                                                        Hapus
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
@@ -243,27 +322,14 @@ export default function Index({ auth, meetings }) {
                     <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in duration-200">
                         <div className="text-center">
                             <div className="mx-auto flex items-center justify-center h-14 w-14 rounded-full bg-indigo-100 mb-4">
-                                <svg
-                                    className="h-7 w-7 text-indigo-600"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth="2"
-                                        d="M13 10V3L4 14h7v7l9-11h-7z"
-                                    ></path>
-                                </svg>
+                                <span className="text-2xl">🚀</span>
                             </div>
                             <h3 className="text-xl font-bold text-slate-800 mb-2">
                                 Mulai Rapat Sekarang?
                             </h3>
                             <p className="text-sm text-slate-500 mb-6">
-                                Sistem akan men-generate QR Code absen unik
-                                untuk semua anggota. Pastikan semua persiapan
-                                sudah selesai.
+                                Sistem akan men-generate QR Code absen untuk
+                                semua anggota.
                             </p>
                             <div className="flex gap-3">
                                 <button
@@ -271,15 +337,93 @@ export default function Index({ auth, meetings }) {
                                         setShowStartModal(false);
                                         setMeetingToStart(null);
                                     }}
-                                    className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
+                                    className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200"
                                 >
                                     Batal
                                 </button>
                                 <button
                                     onClick={confirmStart}
-                                    className="flex-1 px-4 py-2.5 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200"
+                                    className="flex-1 px-4 py-2.5 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700"
                                 >
                                     Ya, Mulai
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ========================================== */}
+            {/* MODAL KONFIRMASI AKHIRI RAPAT */}
+            {/* ========================================== */}
+            {showEndModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in duration-200">
+                        <div className="text-center">
+                            <div className="mx-auto flex items-center justify-center h-14 w-14 rounded-full bg-orange-100 mb-4">
+                                <span className="text-2xl">⏹️</span>
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800 mb-2">
+                                Akhiri Rapat?
+                            </h3>
+                            <p className="text-sm text-slate-500 mb-6">
+                                Sesi absensi akan ditutup. Anggota tidak akan
+                                bisa scan QR Code lagi.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        setShowEndModal(false);
+                                        setMeetingToEnd(null);
+                                    }}
+                                    className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    onClick={confirmEnd}
+                                    className="flex-1 px-4 py-2.5 bg-orange-500 text-white font-semibold rounded-xl hover:bg-orange-600"
+                                >
+                                    Akhiri Rapat
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ========================================== */}
+            {/* MODAL KONFIRMASI BUKA LAGI RAPAT */}
+            {/* ========================================== */}
+            {showResumeModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in duration-200">
+                        <div className="text-center">
+                            <div className="mx-auto flex items-center justify-center h-14 w-14 rounded-full bg-cyan-100 mb-4">
+                                <span className="text-2xl">🔓</span>
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800 mb-2">
+                                Buka Lagi Absensi?
+                            </h3>
+                            <p className="text-sm text-slate-500 mb-6">
+                                Status rapat akan kembali "Berlangsung". Anggota
+                                yang telat bisa scan QR Code kembali.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        setShowResumeModal(false);
+                                        setMeetingToResume(null);
+                                    }}
+                                    className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200"
+                                >
+                                    Batal
+                                </button>
+                                <button
+                                    onClick={confirmResume}
+                                    className="flex-1 px-4 py-2.5 bg-cyan-600 text-white font-semibold rounded-xl hover:bg-cyan-700"
+                                >
+                                    Ya, Buka Lagi
                                 </button>
                             </div>
                         </div>
@@ -295,27 +439,14 @@ export default function Index({ auth, meetings }) {
                     <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl animate-in fade-in zoom-in duration-200">
                         <div className="text-center">
                             <div className="mx-auto flex items-center justify-center h-14 w-14 rounded-full bg-rose-100 mb-4">
-                                <svg
-                                    className="h-7 w-7 text-rose-600"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth="2"
-                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                    ></path>
-                                </svg>
+                                <span className="text-2xl">🗑️</span>
                             </div>
                             <h3 className="text-xl font-bold text-slate-800 mb-2">
                                 Hapus Agenda Rapat?
                             </h3>
                             <p className="text-sm text-slate-500 mb-6">
                                 Tindakan ini tidak dapat dibatalkan. Semua data
-                                absensi yang terkait dengan rapat ini juga akan
-                                terhapus.
+                                absensi terkait juga akan terhapus.
                             </p>
                             <div className="flex gap-3">
                                 <button
@@ -323,13 +454,13 @@ export default function Index({ auth, meetings }) {
                                         setShowDeleteModal(false);
                                         setMeetingToDelete(null);
                                     }}
-                                    className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200 transition-colors"
+                                    className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200"
                                 >
                                     Batal
                                 </button>
                                 <button
                                     onClick={confirmDelete}
-                                    className="flex-1 px-4 py-2.5 bg-rose-600 text-white font-semibold rounded-xl hover:bg-rose-700 transition-colors shadow-sm shadow-rose-200"
+                                    className="flex-1 px-4 py-2.5 bg-rose-600 text-white font-semibold rounded-xl hover:bg-rose-700"
                                 >
                                     Ya, Hapus
                                 </button>
@@ -339,12 +470,10 @@ export default function Index({ auth, meetings }) {
                 </div>
             )}
 
-            {/* ========================================== */}
-            {/* TOAST NOTIFIKASI SCANNER FIXED AREA */}
-            {/* ========================================== */}
+            {/* TOAST NOTIFIKASI SCANNER */}
             {scanResult.message && (
                 <div
-                    className={`fixed top-8 left-1/2 -translate-x-1/2 z-[99999] px-6 py-4 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] font-bold text-[16px] w-11/12 max-w-md text-center transition-all duration-300 animate-in fade-in slide-in-from-top-8 border-2 ${
+                    className={`fixed top-8 left-1/2 -translate-x-1/2 z-[99999] px-6 py-4 rounded-xl shadow-2xl font-bold text-sm w-11/12 max-w-md text-center transition-all duration-300 animate-in fade-in slide-in-from-top-8 border-2 ${
                         scanResult.type === "success"
                             ? "bg-emerald-500 text-white border-emerald-300"
                             : scanResult.type === "error"
@@ -356,9 +485,7 @@ export default function Index({ auth, meetings }) {
                 </div>
             )}
 
-            {/* ========================================== */}
             {/* MODAL SCANNER KAMERA */}
-            {/* ========================================== */}
             {showScanner && activeMeeting && (
                 <div className="fixed inset-0 z-[50] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col relative">
@@ -386,7 +513,6 @@ export default function Index({ auth, meetings }) {
                                         type: "loading",
                                         message: "Memproses QR Code...",
                                     });
-
                                     router.post(
                                         route("admin.attendances.scan"),
                                         {
@@ -401,7 +527,6 @@ export default function Index({ auth, meetings }) {
                                                     page.props.flash;
                                                 const serverErrors =
                                                     page.props.errors;
-
                                                 if (serverFlash?.success) {
                                                     setScanResult({
                                                         type: "success",
@@ -437,31 +562,29 @@ export default function Index({ auth, meetings }) {
                                                     });
                                                     playBeep();
                                                 }
-
-                                                setTimeout(() => {
-                                                    setScanResult({
-                                                        type: null,
-                                                        message: null,
-                                                    });
-                                                }, 3000);
-                                            },
-                                            onError: (err) => {
-                                                console.error(
-                                                    "Gagal hit server:",
-                                                    err,
+                                                setTimeout(
+                                                    () =>
+                                                        setScanResult({
+                                                            type: null,
+                                                            message: null,
+                                                        }),
+                                                    3000,
                                                 );
+                                            },
+                                            onError: () => {
                                                 setScanResult({
                                                     type: "error",
                                                     message:
                                                         "❌ Terjadi kesalahan pada server",
                                                 });
-
-                                                setTimeout(() => {
-                                                    setScanResult({
-                                                        type: null,
-                                                        message: null,
-                                                    });
-                                                }, 3000);
+                                                setTimeout(
+                                                    () =>
+                                                        setScanResult({
+                                                            type: null,
+                                                            message: null,
+                                                        }),
+                                                    3000,
+                                                );
                                             },
                                         },
                                     );

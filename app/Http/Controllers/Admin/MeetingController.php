@@ -108,80 +108,59 @@ class MeetingController extends Controller
         return back()->with('success', 'Rapat berhasil dimulai! QR Code untuk semua anggota telah dibuat.');
     }
 
+    public function endMeeting(Meeting $meeting)
+    {
+        if ($meeting->status !== 'ongoing') {
+            return back()->with('error', 'Hanya rapat yang sedang berlangsung yang dapat diakhiri.');
+        }
+
+        $meeting->update(['status' => 'completed']);
+
+        return back()->with('success', 'Rapat telah diakhiri. Sesi absensi ditutup.');
+    }
+
+    public function resumeMeeting(Meeting $meeting)
+    {
+        if ($meeting->status !== 'completed') {
+            return back()->with('error', 'Hanya rapat yang sudah selesai yang dapat dibuka kembali.');
+        }
+
+        $meeting->update(['status' => 'ongoing']);
+
+        return back()->with('success', 'Rapat dibuka kembali! Anggota yang telat bisa absensi sekarang.');
+    }
+
     public function scan(Request $request)
     {
-        // 1. Validasi data yang dikirim dari React
         $request->validate([
             'meeting_id' => 'required|exists:meetings,id',
             'qr_code_token' => 'required|string',
         ]);
 
-        // 2. Cari tiket absen yang cocok dengan token & ID rapat
-        $attendance = Attendances::with('user')
+        // Eager load relasi 'user' DAN 'meeting' agar kita bisa cek status rapatnya
+        $attendance = Attendances::with(['user', 'meeting'])
             ->where('meeting_id', $request->meeting_id)
             ->where('qr_code_token', $request->qr_code_token)
             ->first();
 
-        // 3. Jika token tidak ditemukan di database
         if (!$attendance) {
             return back()->with('error', '❌ QR Code tidak valid atau bukan untuk agenda rapat ini!');
         }
 
-        // 4. Jika anggota sudah discan sebelumnya
+        // TAMBAHAN LOGIKA: Tolak jika rapat sudah diakhiri
+        if ($attendance->meeting->status === 'completed') {
+            return back()->with('error', '❌ Absensi ditolak! Rapat ini sudah diakhiri.');
+        }
+
         if ($attendance->status === 'hadir') {
             return back()->with('error', "⚠️ {$attendance->user->name} sudah melakukan absensi sebelumnya.");
         }
 
-        // 5. Jika valid, update status menjadi 'hadir' dan catat waktunya
         $attendance->update([
             'status' => 'hadir',
             'scanned_at' => now(),
         ]);
 
-        // 6. Kembalikan respons sukses ke halaman Admin (Kode debug dd() SUDAH DIHAPUS)
         return back()->with('success', "✅ Berhasil! {$attendance->user->name} telah ditandai hadir.");
     }
-
-    // public function scan(Request $request)
-    // {
-    //     // 1. Validasi
-    //     $request->validate([
-    //         'meeting_id' => 'required|exists:meetings,id',
-    //         'qr_code_token' => 'required|string',
-    //     ]);
-
-    //     // 2. Cari tiket absen
-    //     $attendance = Attendances::with('user')
-    //         ->where('meeting_id', $request->meeting_id)
-    //         ->where('qr_code_token', $request->qr_code_token)
-    //         ->first();
-
-    //     // 3. JIKA TOKEN TIDAK DITEMUKAN
-    //     if (!$attendance) {
-    //         // KITA UBAH SEMENTARA UNTUK DEBUGGING:
-    //         // Daripada return back() yang pesannya hilang gara-gara Ngrok,
-    //         // kita paksa Laravel memunculkan modal error berisi data asli dari kamera.
-    //         dd([
-    //             'PESAN' => '❌ GAGAL! QR CODE TIDAK DITEMUKAN DI DATABASE',
-    //             'TOKEN_YANG_DIBACA_KAMERA' => $request->qr_code_token,
-    //             'MEETING_ID_YANG_DIKIRIM' => $request->meeting_id
-    //         ]);
-    //     }
-
-    //     // 4. JIKA SUDAH ABSEN
-    //     if ($attendance->status === 'hadir') {
-    //         dd([
-    //             'PESAN' => '⚠️ ANGGOTA INI SUDAH ABSEN!',
-    //             'NAMA' => $attendance->user->name
-    //         ]);
-    //     }
-
-    //     // 5. JIKA VALID, UPDATE
-    //     $attendance->update([
-    //         'status' => 'hadir',
-    //         'scanned_at' => now(),
-    //     ]);
-
-    //     return back()->with('success', "✅ Berhasil! {$attendance->user->name} telah ditandai hadir.");
-    // }
 }
