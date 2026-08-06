@@ -379,29 +379,31 @@ export default function Welcome({ posts = [] }) {
                             <motion.a
                                 href="#informasi"
                                 whileHover={
-                                    reduceMotion
-                                        ? undefined
-                                        : { y: -3, scale: 1.01 }
+                                    reduceMotion ? undefined : { y: -3 }
                                 }
                                 whileTap={
                                     reduceMotion ? undefined : { scale: 0.98 }
                                 }
-                                className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-300 px-6 py-3.5 font-black text-red-950 shadow-[0_14px_38px_rgba(251,191,36,.2)] transition hover:bg-amber-200"
+                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/[0.08] px-6 py-3.5 font-bold text-white backdrop-blur-md transition-colors duration-200 hover:border-amber-300/60 hover:text-amber-300"
                             >
                                 Lihat kegiatan <ArrowIcon />
                             </motion.a>
-                            <motion.a
-                                href="#program"
+
+                            <motion.div
                                 whileHover={
                                     reduceMotion ? undefined : { y: -3 }
                                 }
                                 whileTap={
                                     reduceMotion ? undefined : { scale: 0.98 }
                                 }
-                                className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/[0.08] px-6 py-3.5 font-bold text-white backdrop-blur-md transition hover:bg-white/[0.13]"
                             >
-                                Tentang Putra Giyanti
-                            </motion.a>
+                                <Link
+                                    href={route("filosofi.logo")}
+                                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/[0.08] px-6 py-3.5 font-bold text-white backdrop-blur-md transition-colors duration-200 hover:border-amber-300/60 hover:text-amber-300 sm:w-auto"
+                                >
+                                    Filosofi Logo <ArrowIcon />
+                                </Link>
+                            </motion.div>
                         </motion.div>
 
                         {/* TAMBAHAN MENU PANDUAN PENGGUNAAN */}

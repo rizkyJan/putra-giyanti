@@ -19,6 +19,9 @@ Route::get('/panduan', function () {
 Route::get('/pengurus', function () {
     return Inertia::render('Pengurus');
 })->name('pengurus');
+Route::get('/filosofi-logo', function () {
+    return Inertia::render('FilosofiLogo');
+})->name('filosofi.logo');
 Route::get('/', [LandingController::class, 'index'])->name('landing');
 Route::get('/informasi/{slug}', [LandingController::class, 'show'])->name('post.show');
 Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('google.login');
