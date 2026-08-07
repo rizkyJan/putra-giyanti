@@ -22,7 +22,9 @@ Route::get('/pengurus', function () {
 Route::get('/filosofi-logo', function () {
     return Inertia::render('FilosofiLogo');
 })->name('filosofi.logo');
-Route::get('/', [LandingController::class, 'index'])->name('landing');
+Route::get('/', [LandingController::class, 'index'])
+    ->middleware('count.visitor')
+    ->name('landing');
 Route::get('/informasi/{slug}', [LandingController::class, 'show'])->name('post.show');
 Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('google.login');
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('google.callback');
