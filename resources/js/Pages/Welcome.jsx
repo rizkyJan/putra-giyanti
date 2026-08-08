@@ -27,12 +27,6 @@ const programs = [
     },
 ];
 
-function getPostImageUrl(image) {
-    if (!image) return null;
-    if (/^https?:\/\//i.test(image)) return image;
-    if (image.startsWith("/")) return image;
-    return `/storage/${image}`;
-}
 
 function formatPostDate(date) {
     if (!date) return "";
@@ -240,12 +234,14 @@ function LogoScene() {
 
 function StandardPostCard({ post, index }) {
     // Penyesuaian pengecekan gambar: Ambil gambar single, atau gambar pertama dari array jika dokumentasi
-    let rawImage = post.image;
-    if (post.type === "dokumentasi" && post.images && post.images.length > 0) {
-        rawImage = post.images[0];
+    let imageUrl = post.image_url;
+    if (
+        post.type === "dokumentasi" &&
+        post.images_urls &&
+        post.images_urls.length > 0
+    ) {
+        imageUrl = post.images_urls[0];
     }
-
-    const imageUrl = getPostImageUrl(rawImage);
     const formattedDate = formatPostDate(post.created_at);
 
     return (

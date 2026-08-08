@@ -92,7 +92,7 @@ export default function Create({ auth }) {
                                 className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
                             />
                             <p className="text-xs text-slate-400 mt-2">
-                                Pilih 1 gambar saja.
+                                Pilih 1 gambar saja. Maksimal 50 MB.
                             </p>
                             {errors.image && (
                                 <p className="text-rose-500 text-sm mt-1">
@@ -119,7 +119,7 @@ export default function Create({ auth }) {
                             />
                             <p className="text-xs text-slate-400 mt-2">
                                 Blok/Pilih banyak gambar sekaligus di
-                                komputermu.
+                                komputermu. Maksimal 50 MB per file.
                             </p>
                             {errors.images && (
                                 <p className="text-rose-500 text-sm mt-1">

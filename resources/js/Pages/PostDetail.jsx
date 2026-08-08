@@ -58,7 +58,7 @@ export default function PostDetail({ post }) {
                     {post.type === "informasi" && post.image && (
                         <div className="w-full bg-[#f8fafc] flex justify-center border-b border-slate-100">
                             <img
-                                src={`/storage/${post.image}`}
+                                src={post.image_url}
                                 alt={post.title}
                                 className="w-full max-h-[600px] object-contain"
                             />
@@ -67,17 +67,17 @@ export default function PostDetail({ post }) {
 
                     {/* Jika Tipe Dokumentasi -> Tampilkan Grid Banyak Gambar (Rapi / object-cover) */}
                     {post.type === "dokumentasi" &&
-                        post.images &&
-                        post.images.length > 0 && (
+                        post.images_urls &&
+                        post.images_urls.length > 0 && (
                             <div className="w-full bg-slate-50 p-6 md:p-10 border-b border-slate-100">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                                    {post.images.map((img, index) => (
+                                    {post.images_urls.map((img, index) => (
                                         <div
                                             key={index}
                                             className="aspect-square rounded-2xl overflow-hidden shadow-sm border border-black/5"
                                         >
                                             <img
-                                                src={`/storage/${img}`}
+                                                src={img}
                                                 alt={`${post.title} - ${index + 1}`}
                                                 className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
                                             />

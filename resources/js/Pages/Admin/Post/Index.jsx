@@ -90,9 +90,13 @@ export default function Index({ auth, posts }) {
                                             {index + 1}
                                         </td>
                                         <td className="p-4">
-                                            {post.image ? (
+                                            {post.image_url ||
+                                            (post.images_urls && post.images_urls[0]) ? (
                                                 <img
-                                                    src={`/storage/${post.image}`}
+                                                    src={
+                                                        post.image_url ||
+                                                        post.images_urls[0]
+                                                    }
                                                     alt={post.title}
                                                     className="w-16 h-12 object-cover rounded-lg shadow-sm border border-slate-200"
                                                 />

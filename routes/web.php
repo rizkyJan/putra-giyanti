@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\PostController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Member\DashboardController as MemberDashboard;
 use App\Http\Controllers\Auth\GoogleAuthController;
+use App\Http\Controllers\DriveImageController;
 
 Route::get('/panduan', function () {
     return Inertia::render('Panduan');
@@ -26,6 +27,15 @@ Route::get('/', [LandingController::class, 'index'])
     ->middleware('count.visitor')
     ->name('landing');
 Route::get('/informasi/{slug}', [LandingController::class, 'show'])->name('post.show');
+Route::get(
+    '/media/drive/{fileId}',
+    [DriveImageController::class, 'show']
+)
+    ->where(
+        'fileId',
+        '[A-Za-z0-9_-]+'
+    )
+    ->name('drive.image');
 Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('google.login');
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('google.callback');
 

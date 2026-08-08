@@ -73,7 +73,7 @@ export default function Edit({ auth, post: dataPost }) {
                             </label>
                             {dataPost.image && dataPost.type === "informasi" ? (
                                 <img
-                                    src={`/storage/${dataPost.image}`}
+                                    src={dataPost.image_url}
                                     alt="Preview"
                                     className="h-32 object-cover rounded-xl border shadow-sm mb-4"
                                 />
@@ -84,7 +84,7 @@ export default function Edit({ auth, post: dataPost }) {
                             )}
 
                             <label className="block text-sm font-bold text-slate-700 mb-2">
-                                Ganti Gambar (Kosongkan jika tidak diganti)
+                                Ganti Gambar (Kosongkan jika tidak diganti, maks. 50 MB)
                             </label>
                             <input
                                 type="file"
@@ -100,13 +100,13 @@ export default function Edit({ auth, post: dataPost }) {
                             <label className="block text-sm font-bold text-slate-700 mb-2">
                                 Galeri Saat Ini
                             </label>
-                            {dataPost.images &&
+                            {dataPost.images_urls &&
                             dataPost.type === "dokumentasi" ? (
                                 <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-                                    {dataPost.images.map((img, idx) => (
+                                    {dataPost.images_urls.map((img, idx) => (
                                         <img
                                             key={idx}
-                                            src={`/storage/${img}`}
+                                            src={img}
                                             alt="Preview"
                                             className="h-24 w-24 object-cover rounded-xl border shadow-sm flex-shrink-0"
                                         />
@@ -119,7 +119,7 @@ export default function Edit({ auth, post: dataPost }) {
                             )}
 
                             <label className="block text-sm font-bold text-slate-700 mb-2">
-                                Ganti Semua Gambar (Akan menimpa yang lama)
+                                Ganti Semua Gambar (Akan menimpa yang lama, maks. 50 MB/file)
                             </label>
                             <input
                                 type="file"

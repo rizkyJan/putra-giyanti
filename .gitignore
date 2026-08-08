@@ -1,27 +1,45 @@
 *.log
 .DS_Store
 .env
-.env.backup
-.env.production
+.env.*
+!.env.example
+
 .phpactor.json
 .phpunit.result.cache
+_ide_helper.php
+
 /.codex
-/.cursor/
+/.cursor
 /.idea
 /.nova
 /.phpunit.cache
 /.vscode
 /.zed
+
 /auth.json
 /node_modules
+/vendor
+
+# Google Drive private credentials
+/storage/app/private/*
+!/storage/app/private/.gitignore
+
+# OAuth helper - hanya dipakai di Windows
+/tools/
+
+# Arsip project lokal
+/*.rar
+/*.zip
+
+# Laravel / Vite generated files
 /public/build
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage
+
 /storage/*.key
 /storage/pail
-/vendor
-_ide_helper.php
+
 Homestead.json
 Homestead.yaml
 Thumbs.db

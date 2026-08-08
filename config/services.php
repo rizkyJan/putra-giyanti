@@ -41,4 +41,22 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
+'google_drive' => [
+
+    'credentials_path' => env(
+        'GOOGLE_DRIVE_CREDENTIALS_PATH',
+        storage_path(
+            'app/private/google-drive-client-secret.json'
+        )
+    ),
+
+    'token_path' => env(
+        'GOOGLE_DRIVE_TOKEN_PATH',
+        storage_path(
+            'app/private/google-drive-token.json'
+        )
+    ),
+
+],
+
 ];
