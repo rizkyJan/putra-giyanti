@@ -683,7 +683,7 @@ export default function Edit({ auth, post: dataPost }) {
             <QueueUploadProgressModal
                 show={modalOpen}
                 stage={uploadStage}
-                stats={queue.stats}
+                items={queue.items}
                 error={uploadError}
                 onRetry={processSubmit}
                 onClose={() => setModalOpen(false)}

@@ -373,7 +373,10 @@ export default function Create({ auth }) {
             <QueueUploadProgressModal
                 show={modalOpen}
                 stage={uploadStage}
-                stats={queue.stats}
+                /*
+                 * LANGSUNG kirim array sebenarnya.
+                 */
+                items={queue.items}
                 error={uploadError}
                 onRetry={processSubmit}
                 onClose={() => setModalOpen(false)}
