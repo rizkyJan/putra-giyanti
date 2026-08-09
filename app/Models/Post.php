@@ -26,27 +26,42 @@ class Post extends Model
 
     /*
      * Otomatis dikirim ke React/Inertia.
-     *
-     * image_url
-     * images_urls
      */
     protected $appends = [
         'image_url',
         'images_urls',
+
+        /*
+         * Khusus halaman Edit.
+         *
+         * Berisi:
+         *
+         * [
+         *   {
+         *      stored: "gdrive:FILE_ID",
+         *      url: "/media/drive/FILE_ID"
+         *   }
+         * ]
+         */
+        'images_items',
     ];
 
     /**
-     * URL untuk gambar utama.
+     * URL gambar utama Informasi.
      */
     public function getImageUrlAttribute(): ?string
     {
         return $this->storedImageUrl(
-            $this->getRawOriginal('image')
+            $this->getRawOriginal(
+                'image'
+            )
         );
     }
 
     /**
-     * URL untuk galeri dokumentasi.
+     * URL galeri.
+     *
+     * Tetap dipakai Welcome/PostDetail.
      */
     public function getImagesUrlsAttribute(): array
     {
@@ -55,7 +70,9 @@ class Post extends Model
         )
             ->map(
                 fn ($image) =>
-                    $this->storedImageUrl($image)
+                    $this->storedImageUrl(
+                        $image
+                    )
             )
             ->filter()
             ->values()
@@ -63,20 +80,57 @@ class Post extends Model
     }
 
     /**
-     * Mendukung 3 jenis gambar:
+     * Data khusus halaman Edit.
+     *
+     * Tidak hanya URL,
+     * tetapi juga nilai yang tersimpan DB.
+     */
+    public function getImagesItemsAttribute(): array
+    {
+        return collect(
+            $this->images ?? []
+        )
+            ->filter(
+                fn ($image) =>
+                    is_string($image)
+                    && $image !== ''
+            )
+            ->map(
+                fn ($image) => [
+                    /*
+                     * Nilai database.
+                     *
+                     * Contoh:
+                     * gdrive:1ABCDEF
+                     */
+                    'stored' =>
+                        $image,
+
+                    /*
+                     * URL untuk <img>.
+                     */
+                    'url' =>
+                        $this->storedImageUrl(
+                            $image
+                        ),
+                ]
+            )
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Ubah nilai database menjadi URL browser.
+     *
+     * Mendukung:
      *
      * 1. Google Drive
-     *    gdrive:FILE_ID
-     *
-     * 2. Gambar lama storage Laravel
-     *    posts/abc.jpg
-     *
-     * 3. URL eksternal
+     * 2. URL eksternal
+     * 3. Foto lama storage Laravel
      */
     private function storedImageUrl(
         ?string $storedImage
     ): ?string {
-
         if (!$storedImage) {
             return null;
         }
@@ -90,7 +144,6 @@ class Post extends Model
                 'gdrive:'
             )
         ) {
-
             return route(
                 'drive.image',
                 [
@@ -104,7 +157,7 @@ class Post extends Model
         }
 
         /*
-         * URL biasa.
+         * URL eksternal.
          */
         if (
             Str::startsWith(
@@ -119,8 +172,15 @@ class Post extends Model
         }
 
         /*
-         * Foto lama tetap menggunakan
-         * storage Laravel.
+         * Foto lama tetap didukung.
+         *
+         * Contoh:
+         *
+         * posts/gallery/abc.jpg
+         *
+         * menjadi:
+         *
+         * /storage/posts/gallery/abc.jpg
          */
         return asset(
             'storage/'
