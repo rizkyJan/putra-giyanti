@@ -92,6 +92,14 @@ export default function Create({ auth }) {
              * otomatis dilewati saat retry.
              */
             const uploaded = await queue.uploadAll();
+            if (uploaded.length !== queue.total) {
+                throw new Error(
+                    `Upload belum lengkap. ` +
+                        `${uploaded.length} dari ` +
+                        `${queue.total} foto berhasil. ` +
+                        `Data belum disimpan.`,
+                );
+            }
 
             /*
              * Ambil hasil Google Drive:

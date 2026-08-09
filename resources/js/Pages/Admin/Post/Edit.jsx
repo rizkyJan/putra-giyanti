@@ -186,6 +186,14 @@ export default function Edit({ auth, post: dataPost }) {
              * Foto lama tidak di-upload ulang.
              */
             const uploaded = await queue.uploadAll();
+            if (uploaded.length !== queue.total) {
+                throw new Error(
+                    `Upload foto baru belum lengkap. ` +
+                        `${uploaded.length} dari ` +
+                        `${queue.total} foto berhasil. ` +
+                        `Perubahan belum disimpan.`,
+                );
+            }
 
             const refs = uploaded.map((item) => item.stored);
 

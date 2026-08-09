@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 export const MAX_IMAGE_SIZE = 50 * 1024 * 1024;
 
+/*
+ * =============================================
+ * HELPERS
+ * =============================================
+ */
+
 function makeId() {
     if (
         typeof crypto !== "undefined" &&
@@ -29,53 +35,35 @@ function isImage(file) {
     return /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name || "");
 }
 
-/*
- * ======================================================
- * CSRF
- * ======================================================
- */
 function getCsrfData() {
     const meta = document.querySelector('meta[name="csrf-token"]');
 
-    if (meta && meta.content) {
+    if (meta?.content) {
         return {
             type: "meta",
             token: meta.content,
         };
     }
 
-    const cookieRows = document.cookie ? document.cookie.split("; ") : [];
+    const rows = document.cookie ? document.cookie.split("; ") : [];
 
-    const xsrfCookie = cookieRows.find((row) => row.startsWith("XSRF-TOKEN="));
+    const cookie = rows.find((row) => row.startsWith("XSRF-TOKEN="));
 
-    if (xsrfCookie) {
-        try {
-            return {
-                type: "cookie",
-
-                token: decodeURIComponent(
-                    xsrfCookie.split("=").slice(1).join("="),
-                ),
-            };
-        } catch {
-            return null;
-        }
+    if (!cookie) {
+        return null;
     }
 
-    return null;
+    try {
+        return {
+            type: "cookie",
+
+            token: decodeURIComponent(cookie.split("=").slice(1).join("=")),
+        };
+    } catch {
+        return null;
+    }
 }
 
-/*
- * ======================================================
- * RESPONSE PARSER
- * ======================================================
- *
- * Jangan gunakan:
- *
- * xhr.responseType = "json"
- *
- * agar lebih kompatibel dengan Safari/iPhone.
- */
 function parseJsonResponse(xhr) {
     const text = typeof xhr.responseText === "string" ? xhr.responseText : "";
 
@@ -100,9 +88,7 @@ function extractError(response, fallback = "Terjadi kesalahan saat upload.") {
     }
 
     if (response.errors && typeof response.errors === "object") {
-        const values = Object.values(response.errors);
-
-        for (const value of values) {
+        for (const value of Object.values(response.errors)) {
             if (Array.isArray(value) && value.length > 0) {
                 return value[0];
             }
@@ -117,21 +103,11 @@ function extractError(response, fallback = "Terjadi kesalahan saat upload.") {
 }
 
 /*
- * ======================================================
+ * =============================================
  * UPLOAD SATU FOTO
- * ======================================================
- *
- * Browser
- *   ↓
- * Laravel / Ubuntu
- *   ↓
- * Google Drive
- *   ↓
- * response JSON
- *
- * Promise baru resolve kalau Google Drive
- * sudah benar-benar selesai.
+ * =============================================
  */
+
 function uploadSingleImage(file, onProgress) {
     return new Promise((resolve, reject) => {
         let xhr;
@@ -142,15 +118,11 @@ function uploadSingleImage(file, onProgress) {
             xhr.open("POST", route("admin.posts.images.upload"), true);
 
             /*
-             * PENTING:
+             * Jangan gunakan:
              *
-             * Jangan:
+             * xhr.responseType = "json"
              *
-             * xhr.responseType = "json";
-             *
-             * Safari tertentu bisa bermasalah.
-             * Kita JSON.parse(responseText)
-             * secara manual.
+             * Supaya lebih aman di Safari/iPhone.
              */
 
             xhr.timeout = 10 * 60 * 1000;
@@ -170,9 +142,7 @@ function uploadSingleImage(file, onProgress) {
             }
 
             /*
-             * ==================================
-             * PROGRESS BROWSER -> SERVER
-             * ==================================
+             * Browser -> Ubuntu.
              */
             if (xhr.upload) {
                 xhr.upload.onprogress = (event) => {
@@ -180,37 +150,34 @@ function uploadSingleImage(file, onProgress) {
                         return;
                     }
 
-                    const percentage = Math.min(
-                        100,
-                        Math.max(
-                            0,
+                    const percentage = Math.max(
+                        0,
+                        Math.min(
+                            100,
                             Math.round((event.loaded / event.total) * 100),
                         ),
                     );
 
-                    if (typeof onProgress === "function") {
-                        onProgress(percentage);
-                    }
+                    onProgress?.(percentage);
                 };
             }
 
             /*
-             * ==================================
-             * SERVER RESPONSE
-             * ==================================
+             * Response ini baru datang setelah:
+             *
+             * Browser -> Ubuntu
+             * Ubuntu -> Google Drive
+             *
+             * selesai.
              */
             xhr.onload = () => {
                 const response = parseJsonResponse(xhr);
 
                 if (xhr.status >= 200 && xhr.status < 300 && response?.stored) {
                     resolve(response);
-
                     return;
                 }
 
-                /*
-                 * Session / login habis.
-                 */
                 if (xhr.status === 401) {
                     reject(
                         new Error(
@@ -221,9 +188,6 @@ function uploadSingleImage(file, onProgress) {
                     return;
                 }
 
-                /*
-                 * CSRF / session.
-                 */
                 if (xhr.status === 419) {
                     reject(
                         new Error(
@@ -234,9 +198,6 @@ function uploadSingleImage(file, onProgress) {
                     return;
                 }
 
-                /*
-                 * File terlalu besar di Nginx.
-                 */
                 if (xhr.status === 413) {
                     reject(
                         new Error("Ukuran gambar terlalu besar untuk server."),
@@ -245,9 +206,6 @@ function uploadSingleImage(file, onProgress) {
                     return;
                 }
 
-                /*
-                 * Validasi Laravel.
-                 */
                 if (xhr.status === 422) {
                     reject(
                         new Error(
@@ -265,96 +223,64 @@ function uploadSingleImage(file, onProgress) {
                     new Error(
                         extractError(
                             response,
-                            `Upload gagal. Server mengembalikan HTTP ${xhr.status}.`,
+                            `Upload gagal. HTTP ${xhr.status}.`,
                         ),
                     ),
                 );
             };
 
-            /*
-             * Network error.
-             */
             xhr.onerror = () => {
                 reject(
                     new Error(
-                        "Koneksi ke server terputus. Periksa internet lalu tekan Coba Lagi.",
+                        "Koneksi terputus. Periksa internet lalu tekan Coba Lagi.",
                     ),
                 );
             };
 
-            /*
-             * Timeout.
-             */
             xhr.ontimeout = () => {
                 reject(
                     new Error(
-                        "Upload terlalu lama dan melewati batas waktu. Tekan Coba Lagi untuk melanjutkan.",
+                        "Upload terlalu lama. Tekan Coba Lagi untuk melanjutkan.",
                     ),
                 );
             };
 
-            /*
-             * Request dibatalkan.
-             */
             xhr.onabort = () => {
                 reject(new Error("Upload dibatalkan."));
             };
 
-            /*
-             * ==================================
-             * FORM DATA
-             * ==================================
-             */
             const formData = new FormData();
 
             formData.append("image", file, file.name);
 
-            /*
-             * Tambahkan _token juga sebagai
-             * fallback selain header.
-             */
             if (csrf?.type === "meta") {
                 formData.append("_token", csrf.token);
             }
 
             /*
-             * Jangan set Content-Type manual.
-             *
-             * Browser harus membuat
-             * multipart boundary sendiri.
+             * JANGAN set Content-Type manual.
              */
             xhr.send(formData);
         } catch (error) {
-            console.error("XHR initialization error:", error);
-
             reject(
-                new Error(
-                    error?.message ||
-                        "Browser tidak dapat memulai proses upload.",
-                ),
+                new Error(error?.message || "Browser gagal memulai upload."),
             );
         }
     });
 }
 
 /*
- * ======================================================
- * HAPUS TEMPORARY UPLOAD
- * ======================================================
+ * =============================================
+ * HAPUS TEMPORARY DRIVE
+ * =============================================
  */
+
 function deleteTemporaryUpload(stored) {
     return new Promise((resolve, reject) => {
-        let xhr;
-
         try {
-            xhr = new XMLHttpRequest();
+            const xhr = new XMLHttpRequest();
 
             xhr.open("POST", route("admin.posts.images.delete-temp"), true);
-
-            /*
-             * Sama:
-             * jangan pakai responseType json.
-             */
 
             xhr.timeout = 120000;
 
@@ -377,7 +303,6 @@ function deleteTemporaryUpload(stored) {
 
                 if (xhr.status >= 200 && xhr.status < 300) {
                     resolve(response);
-
                     return;
                 }
 
@@ -399,14 +324,6 @@ function deleteTemporaryUpload(stored) {
                 );
             };
 
-            xhr.ontimeout = () => {
-                reject(
-                    new Error(
-                        "Proses menghapus temporary upload terlalu lama.",
-                    ),
-                );
-            };
-
             const formData = new FormData();
 
             formData.append("stored", stored);
@@ -417,12 +334,9 @@ function deleteTemporaryUpload(stored) {
 
             xhr.send(formData);
         } catch (error) {
-            console.error("Delete temporary XHR error:", error);
-
             reject(
                 new Error(
-                    error?.message ||
-                        "Browser gagal menghapus temporary upload.",
+                    error?.message || "Gagal menghapus temporary upload.",
                 ),
             );
         }
@@ -430,247 +344,55 @@ function deleteTemporaryUpload(stored) {
 }
 
 /*
- * ======================================================
- * QUEUE HOOK
- * ======================================================
+ * =============================================
+ * HOOK
+ * =============================================
  */
+
 export default function useImageUploadQueue() {
     const [items, setItems] = useState([]);
 
     /*
-     * itemsRef diperlukan karena queue berjalan
-     * asynchronous.
+     * Ini sekarang menjadi SOURCE OF TRUTH.
      */
     const itemsRef = useRef([]);
 
     /*
-     * Sinkronkan state + ref.
+     * =========================================
+     * UPDATE STATE SYNCHRONOUS
+     * =========================================
+     *
+     * INI PERBAIKAN UTAMANYA.
+     *
+     * Dulu itemsRef diubah di callback setItems.
+     * Itu bisa terlambat.
+     *
+     * Sekarang:
+     *
+     * 1. hitung next
+     * 2. ubah itemsRef LANGSUNG
+     * 3. baru render React
      */
-    const commitItems = (updater) => {
-        setItems((previous) => {
-            const next =
-                typeof updater === "function" ? updater(previous) : updater;
+    const replaceItems = (next) => {
+        itemsRef.current = next;
 
-            itemsRef.current = next;
-
-            return next;
-        });
+        setItems(next);
     };
 
-    /*
-     * Cleanup object URLs ketika component
-     * benar-benar hilang.
-     */
-    useEffect(() => {
-        return () => {
-            itemsRef.current.forEach((item) => {
-                if (item.preview) {
-                    try {
-                        URL.revokeObjectURL(item.preview);
-                    } catch {
-                        // Tidak perlu menggagalkan app.
-                    }
-                }
-            });
-        };
-    }, []);
+    const mutateItems = (updater) => {
+        const previous = itemsRef.current;
 
-    /*
-     * Buat item queue.
-     */
-    const createItem = (file) => ({
-        id: makeId(),
+        const next = updater(previous);
 
-        key: fileKey(file),
+        itemsRef.current = next;
 
-        file,
+        setItems(next);
 
-        preview: URL.createObjectURL(file),
-
-        /*
-         * queued
-         * uploading
-         * done
-         * error
-         */
-        status: "queued",
-
-        progress: 0,
-
-        stored: null,
-
-        url: null,
-
-        error: null,
-    });
-
-    /*
-     * ==================================================
-     * TAMBAH FILE
-     * ==================================================
-     */
-    const addFiles = (rawFiles) => {
-        const selectedFiles = Array.from(rawFiles || []);
-
-        const existingKeys = new Set(itemsRef.current.map((item) => item.key));
-
-        const added = [];
-
-        const rejected = [];
-
-        selectedFiles.forEach((file) => {
-            if (!isImage(file)) {
-                rejected.push(`${file.name}: bukan file gambar`);
-
-                return;
-            }
-
-            if (file.size > MAX_IMAGE_SIZE) {
-                rejected.push(`${file.name}: lebih dari 50 MB`);
-
-                return;
-            }
-
-            const key = fileKey(file);
-
-            if (existingKeys.has(key)) {
-                rejected.push(`${file.name}: sudah dipilih`);
-
-                return;
-            }
-
-            existingKeys.add(key);
-
-            try {
-                added.push(createItem(file));
-            } catch (error) {
-                /*
-                 * Kalau browser gagal membuat
-                 * object URL, jangan sampai
-                 * seluruh upload mati.
-                 */
-                console.error("Preview error:", error);
-
-                added.push({
-                    id: makeId(),
-
-                    key,
-
-                    file,
-
-                    preview: null,
-
-                    status: "queued",
-
-                    progress: 0,
-
-                    stored: null,
-
-                    url: null,
-
-                    error: null,
-                });
-            }
-        });
-
-        if (added.length > 0) {
-            commitItems((previous) => [...previous, ...added]);
-        }
-
-        return {
-            added: added.length,
-
-            rejected,
-        };
+        return next;
     };
 
-    /*
-     * Informasi hanya satu gambar.
-     */
-    const replaceSingleFile = async (file) => {
-        await clearAll();
-
-        return addFiles([file]);
-    };
-
-    /*
-     * ==================================================
-     * REMOVE SATU FOTO
-     * ==================================================
-     */
-    const removeItem = async (id) => {
-        const item = itemsRef.current.find((row) => row.id === id);
-
-        if (!item) {
-            return;
-        }
-
-        if (item.status === "uploading") {
-            throw new Error("Foto sedang diproses dan belum bisa dihapus.");
-        }
-
-        /*
-         * Kalau sudah berhasil ke Drive
-         * tetapi belum menjadi post,
-         * hapus temporary Drive-nya.
-         */
-        if (item.stored) {
-            await deleteTemporaryUpload(item.stored);
-        }
-
-        if (item.preview) {
-            try {
-                URL.revokeObjectURL(item.preview);
-            } catch {
-                // Abaikan.
-            }
-        }
-
-        commitItems((previous) => previous.filter((row) => row.id !== id));
-    };
-
-    /*
-     * ==================================================
-     * CLEAR ALL
-     * ==================================================
-     */
-    const clearAll = async () => {
-        const snapshot = [...itemsRef.current];
-
-        const errors = [];
-
-        for (const item of snapshot) {
-            try {
-                if (item.stored) {
-                    await deleteTemporaryUpload(item.stored);
-                }
-
-                if (item.preview) {
-                    try {
-                        URL.revokeObjectURL(item.preview);
-                    } catch {
-                        // Abaikan.
-                    }
-                }
-
-                commitItems((previous) =>
-                    previous.filter((row) => row.id !== item.id),
-                );
-            } catch (error) {
-                errors.push(error?.message || "Gagal membersihkan file.");
-            }
-        }
-
-        if (errors.length > 0) {
-            throw new Error(errors[0]);
-        }
-    };
-
-    /*
-     * Update item.
-     */
     const updateItem = (id, patch) => {
-        commitItems((previous) =>
+        return mutateItems((previous) =>
             previous.map((item) =>
                 item.id === id
                     ? {
@@ -683,38 +405,209 @@ export default function useImageUploadQueue() {
     };
 
     /*
-     * ==================================================
-     * QUEUE
-     * ==================================================
-     *
-     * SATU FOTO PER REQUEST.
+     * Cleanup preview.
+     */
+    useEffect(() => {
+        return () => {
+            itemsRef.current.forEach((item) => {
+                if (item.preview) {
+                    try {
+                        URL.revokeObjectURL(item.preview);
+                    } catch {
+                        //
+                    }
+                }
+            });
+        };
+    }, []);
+
+    const createItem = (file) => {
+        let preview = null;
+
+        try {
+            preview = URL.createObjectURL(file);
+        } catch {
+            preview = null;
+        }
+
+        return {
+            id: makeId(),
+
+            key: fileKey(file),
+
+            file,
+
+            preview,
+
+            status: "queued",
+
+            progress: 0,
+
+            stored: null,
+
+            url: null,
+
+            error: null,
+        };
+    };
+
+    /*
+     * =========================================
+     * ADD FILE
+     * =========================================
+     */
+    const addFiles = (rawFiles) => {
+        const selected = Array.from(rawFiles || []);
+
+        const existingKeys = new Set(itemsRef.current.map((item) => item.key));
+
+        const added = [];
+
+        const rejected = [];
+
+        for (const file of selected) {
+            if (!isImage(file)) {
+                rejected.push(`${file.name}: bukan gambar`);
+
+                continue;
+            }
+
+            if (file.size > MAX_IMAGE_SIZE) {
+                rejected.push(`${file.name}: lebih dari 50 MB`);
+
+                continue;
+            }
+
+            const key = fileKey(file);
+
+            if (existingKeys.has(key)) {
+                rejected.push(`${file.name}: sudah dipilih`);
+
+                continue;
+            }
+
+            existingKeys.add(key);
+
+            added.push(createItem(file));
+        }
+
+        if (added.length > 0) {
+            mutateItems((previous) => [...previous, ...added]);
+        }
+
+        return {
+            added: added.length,
+
+            rejected,
+        };
+    };
+
+    /*
+     * Informasi = satu gambar.
+     */
+    const replaceSingleFile = async (file) => {
+        await clearAll();
+
+        return addFiles([file]);
+    };
+
+    /*
+     * =========================================
+     * REMOVE
+     * =========================================
+     */
+    const removeItem = async (id) => {
+        const item = itemsRef.current.find((row) => row.id === id);
+
+        if (!item) {
+            return;
+        }
+
+        if (item.status === "uploading") {
+            throw new Error("Foto sedang di-upload dan belum bisa dihapus.");
+        }
+
+        if (item.stored) {
+            await deleteTemporaryUpload(item.stored);
+        }
+
+        if (item.preview) {
+            try {
+                URL.revokeObjectURL(item.preview);
+            } catch {
+                //
+            }
+        }
+
+        mutateItems((previous) => previous.filter((row) => row.id !== id));
+    };
+
+    /*
+     * =========================================
+     * CLEAR ALL
+     * =========================================
+     */
+    const clearAll = async () => {
+        const snapshot = [...itemsRef.current];
+
+        for (const item of snapshot) {
+            if (item.status === "uploading") {
+                throw new Error("Upload sedang berjalan.");
+            }
+
+            if (item.stored) {
+                await deleteTemporaryUpload(item.stored);
+            }
+
+            if (item.preview) {
+                try {
+                    URL.revokeObjectURL(item.preview);
+                } catch {
+                    //
+                }
+            }
+        }
+
+        replaceItems([]);
+    };
+
+    /*
+     * =========================================
+     * UPLOAD QUEUE
+     * =========================================
      */
     const uploadAll = async () => {
         /*
-         * Ambil snapshot terbaru.
+         * Jangan pakai snapshot untuk
+         * hasil akhir.
+         *
+         * Setiap iterasi selalu ambil
+         * itemsRef.current terbaru.
          */
-        const working = itemsRef.current.map((item) => ({
-            ...item,
-        }));
 
-        for (let index = 0; index < working.length; index += 1) {
-            const item = working[index];
+        const totalAtStart = itemsRef.current.length;
+
+        for (let index = 0; index < totalAtStart; index += 1) {
+            /*
+             * Selalu ambil data terbaru.
+             */
+            let item = itemsRef.current[index];
+
+            if (!item) {
+                throw new Error(`Data foto ke-${index + 1} tidak ditemukan.`);
+            }
 
             /*
-             * Kalau sudah berhasil pada
-             * percobaan sebelumnya,
-             * skip.
+             * Sudah selesai dari percobaan
+             * sebelumnya -> jangan upload ulang.
              */
             if (item.status === "done" && item.stored) {
                 continue;
             }
 
-            item.status = "uploading";
-
-            item.progress = 0;
-
-            item.error = null;
-
+            /*
+             * Mulai.
+             */
             updateItem(item.id, {
                 status: "uploading",
 
@@ -728,24 +621,19 @@ export default function useImageUploadQueue() {
                     item.file,
 
                     (percentage) => {
-                        item.progress = percentage;
-
+                        /*
+                         * Update progress synchronous.
+                         */
                         updateItem(item.id, {
                             progress: percentage,
                         });
                     },
                 );
 
-                item.status = "done";
-
-                item.progress = 100;
-
-                item.stored = response.stored;
-
-                item.url = response.url;
-
-                item.error = null;
-
+                /*
+                 * Google Drive benar-benar
+                 * sudah selesai.
+                 */
                 updateItem(item.id, {
                     status: "done",
 
@@ -758,48 +646,69 @@ export default function useImageUploadQueue() {
                     error: null,
                 });
             } catch (error) {
-                console.error("Upload queue item error:", error);
-
-                item.status = "error";
-
-                item.error = error?.message || "Upload gagal.";
+                const message = error?.message || "Upload gagal.";
 
                 updateItem(item.id, {
                     status: "error",
 
-                    error: item.error,
+                    error: message,
                 });
 
                 /*
-                 * STOP di foto gagal.
+                 * STOP.
                  *
-                 * Retry nanti melanjutkan
-                 * dari sini.
+                 * Jangan simpan post dalam
+                 * keadaan sebagian.
                  */
-                throw new Error(`${item.file.name}: ${item.error}`);
+                throw new Error(`${item.file.name}: ${message}`);
             }
         }
 
         /*
-         * Jangan gunakan working saja,
-         * ambil state/ref yang paling baru.
+         * =====================================
+         * HARD VALIDATION
+         * =====================================
+         *
+         * Jangan pernah final-save jika
+         * jumlah hasil Drive tidak sama
+         * dengan jumlah foto queue.
          */
-        return itemsRef.current
-            .filter((item) => item.status === "done" && item.stored)
-            .map((item) => ({
-                ...item,
-            }));
+        const latest = itemsRef.current;
+
+        const completed = latest.filter(
+            (item) => item.status === "done" && item.stored,
+        );
+
+        if (completed.length !== latest.length) {
+            throw new Error(
+                `Upload belum lengkap. ` +
+                    `${completed.length} dari ` +
+                    `${latest.length} foto berhasil. ` +
+                    `Tekan Coba Lagi untuk melanjutkan.`,
+            );
+        }
+
+        /*
+         * Kembalikan copy terbaru.
+         */
+        return completed.map((item) => ({
+            ...item,
+        }));
     };
 
     /*
-     * ==================================================
-     * STATS
-     * ==================================================
+     * =========================================
+     * STATISTIK
+     * =========================================
      */
     const stats = useMemo(() => {
         const total = items.length;
 
-        const completed = items.filter((item) => item.status === "done").length;
+        const completed = items.filter(
+            (item) => item.status === "done" && item.stored,
+        ).length;
+
+        const remaining = Math.max(0, total - completed);
 
         const currentIndex = items.findIndex(
             (item) => item.status === "uploading" || item.status === "error",
@@ -807,13 +716,6 @@ export default function useImageUploadQueue() {
 
         const current = currentIndex >= 0 ? items[currentIndex] : null;
 
-        /*
-         * Progress keseluruhan dihitung
-         * berdasarkan jumlah FOTO yang
-         * benar-benar selesai ke Drive.
-         *
-         * Bukan berdasarkan byte palsu.
-         */
         const overallPercentage =
             total > 0 ? Math.round((completed / total) * 100) : 0;
 
@@ -822,16 +724,23 @@ export default function useImageUploadQueue() {
 
             completed,
 
-            remaining: Math.max(0, total - completed),
+            /*
+             * Sekarang ini PASTI:
+             *
+             * total - completed.
+             */
+            remaining,
 
             current,
 
             currentNumber:
                 currentIndex >= 0
                     ? currentIndex + 1
-                    : Math.min(completed + 1, total),
+                    : completed < total
+                      ? completed + 1
+                      : total,
 
-            currentProgress: current?.progress || 0,
+            currentProgress: current ? Number(current.progress || 0) : 0,
 
             overallPercentage,
         };
