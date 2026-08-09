@@ -2,222 +2,449 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 export const MAX_IMAGE_SIZE = 50 * 1024 * 1024;
 
-/**
- * ID lokal untuk setiap file.
- */
 function makeId() {
-    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    if (
+        typeof crypto !== "undefined" &&
+        typeof crypto.randomUUID === "function"
+    ) {
         return crypto.randomUUID();
     }
 
     return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-/**
- * Identitas file untuk mencegah
- * file sama masuk dua kali.
- */
 function fileKey(file) {
     return [file.name, file.size, file.lastModified].join("-");
 }
 
 function isImage(file) {
-    if (file.type && file.type.startsWith("image/")) {
+    if (!file) {
+        return false;
+    }
+
+    if (typeof file.type === "string" && file.type.startsWith("image/")) {
         return true;
     }
 
     return /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name || "");
 }
 
-/**
- * Ambil CSRF Laravel.
+/*
+ * ======================================================
+ * CSRF
+ * ======================================================
  */
 function getCsrfData() {
     const meta = document.querySelector('meta[name="csrf-token"]');
 
-    if (meta?.content) {
+    if (meta && meta.content) {
         return {
             type: "meta",
             token: meta.content,
         };
     }
 
-    const cookie = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("XSRF-TOKEN="));
+    const cookieRows = document.cookie ? document.cookie.split("; ") : [];
 
-    if (cookie) {
-        return {
-            type: "cookie",
+    const xsrfCookie = cookieRows.find((row) => row.startsWith("XSRF-TOKEN="));
 
-            token: decodeURIComponent(cookie.split("=").slice(1).join("=")),
-        };
+    if (xsrfCookie) {
+        try {
+            return {
+                type: "cookie",
+
+                token: decodeURIComponent(
+                    xsrfCookie.split("=").slice(1).join("="),
+                ),
+            };
+        } catch {
+            return null;
+        }
     }
 
     return null;
 }
 
-function extractError(response) {
-    if (!response) {
-        return "Terjadi kesalahan saat upload.";
+/*
+ * ======================================================
+ * RESPONSE PARSER
+ * ======================================================
+ *
+ * Jangan gunakan:
+ *
+ * xhr.responseType = "json"
+ *
+ * agar lebih kompatibel dengan Safari/iPhone.
+ */
+function parseJsonResponse(xhr) {
+    const text = typeof xhr.responseText === "string" ? xhr.responseText : "";
+
+    if (!text) {
+        return null;
     }
 
-    if (response.message) {
+    try {
+        return JSON.parse(text);
+    } catch {
+        return null;
+    }
+}
+
+function extractError(response, fallback = "Terjadi kesalahan saat upload.") {
+    if (!response) {
+        return fallback;
+    }
+
+    if (typeof response.message === "string" && response.message) {
         return response.message;
     }
 
-    if (response.errors) {
-        const firstError = Object.values(response.errors).flat().find(Boolean);
+    if (response.errors && typeof response.errors === "object") {
+        const values = Object.values(response.errors);
 
-        if (firstError) {
-            return firstError;
+        for (const value of values) {
+            if (Array.isArray(value) && value.length > 0) {
+                return value[0];
+            }
+
+            if (typeof value === "string" && value) {
+                return value;
+            }
         }
     }
 
-    return "Terjadi kesalahan saat upload.";
+    return fallback;
 }
 
-/**
- * Upload SATU gambar.
+/*
+ * ======================================================
+ * UPLOAD SATU FOTO
+ * ======================================================
  *
- * Promise baru resolve ketika:
+ * Browser
+ *   ↓
+ * Laravel / Ubuntu
+ *   ↓
+ * Google Drive
+ *   ↓
+ * response JSON
  *
- * browser -> Ubuntu selesai
- * DAN
- * Ubuntu -> Google Drive selesai.
+ * Promise baru resolve kalau Google Drive
+ * sudah benar-benar selesai.
  */
 function uploadSingleImage(file, onProgress) {
     return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
+        let xhr;
 
-        xhr.open("POST", route("admin.posts.images.upload"));
+        try {
+            xhr = new XMLHttpRequest();
 
-        xhr.responseType = "json";
+            xhr.open("POST", route("admin.posts.images.upload"), true);
 
-        xhr.timeout = 10 * 60 * 1000;
+            /*
+             * PENTING:
+             *
+             * Jangan:
+             *
+             * xhr.responseType = "json";
+             *
+             * Safari tertentu bisa bermasalah.
+             * Kita JSON.parse(responseText)
+             * secara manual.
+             */
 
-        xhr.setRequestHeader("Accept", "application/json");
+            xhr.timeout = 10 * 60 * 1000;
 
-        xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+            xhr.setRequestHeader("Accept", "application/json");
 
-        const csrf = getCsrfData();
+            xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
 
-        if (csrf?.type === "meta") {
-            xhr.setRequestHeader("X-CSRF-TOKEN", csrf.token);
-        }
+            const csrf = getCsrfData();
 
-        if (csrf?.type === "cookie") {
-            xhr.setRequestHeader("X-XSRF-TOKEN", csrf.token);
-        }
-
-        xhr.upload.onprogress = (event) => {
-            if (!event.lengthComputable) {
-                return;
+            if (csrf?.type === "meta") {
+                xhr.setRequestHeader("X-CSRF-TOKEN", csrf.token);
             }
 
-            const percentage = Math.round((event.loaded / event.total) * 100);
+            if (csrf?.type === "cookie") {
+                xhr.setRequestHeader("X-XSRF-TOKEN", csrf.token);
+            }
 
-            onProgress?.(percentage);
-        };
+            /*
+             * ==================================
+             * PROGRESS BROWSER -> SERVER
+             * ==================================
+             */
+            if (xhr.upload) {
+                xhr.upload.onprogress = (event) => {
+                    if (!event.lengthComputable || !event.total) {
+                        return;
+                    }
 
-        xhr.onload = () => {
-            let response = xhr.response;
+                    const percentage = Math.min(
+                        100,
+                        Math.max(
+                            0,
+                            Math.round((event.loaded / event.total) * 100),
+                        ),
+                    );
 
-            if (!response && xhr.responseText) {
-                try {
-                    response = JSON.parse(xhr.responseText);
-                } catch {
-                    response = null;
+                    if (typeof onProgress === "function") {
+                        onProgress(percentage);
+                    }
+                };
+            }
+
+            /*
+             * ==================================
+             * SERVER RESPONSE
+             * ==================================
+             */
+            xhr.onload = () => {
+                const response = parseJsonResponse(xhr);
+
+                if (xhr.status >= 200 && xhr.status < 300 && response?.stored) {
+                    resolve(response);
+
+                    return;
                 }
+
+                /*
+                 * Session / login habis.
+                 */
+                if (xhr.status === 401) {
+                    reject(
+                        new Error(
+                            "Sesi login sudah berakhir. Silakan login kembali.",
+                        ),
+                    );
+
+                    return;
+                }
+
+                /*
+                 * CSRF / session.
+                 */
+                if (xhr.status === 419) {
+                    reject(
+                        new Error(
+                            "Sesi keamanan sudah berakhir. Refresh halaman lalu coba lagi.",
+                        ),
+                    );
+
+                    return;
+                }
+
+                /*
+                 * File terlalu besar di Nginx.
+                 */
+                if (xhr.status === 413) {
+                    reject(
+                        new Error("Ukuran gambar terlalu besar untuk server."),
+                    );
+
+                    return;
+                }
+
+                /*
+                 * Validasi Laravel.
+                 */
+                if (xhr.status === 422) {
+                    reject(
+                        new Error(
+                            extractError(
+                                response,
+                                "Gambar tidak lolos validasi.",
+                            ),
+                        ),
+                    );
+
+                    return;
+                }
+
+                reject(
+                    new Error(
+                        extractError(
+                            response,
+                            `Upload gagal. Server mengembalikan HTTP ${xhr.status}.`,
+                        ),
+                    ),
+                );
+            };
+
+            /*
+             * Network error.
+             */
+            xhr.onerror = () => {
+                reject(
+                    new Error(
+                        "Koneksi ke server terputus. Periksa internet lalu tekan Coba Lagi.",
+                    ),
+                );
+            };
+
+            /*
+             * Timeout.
+             */
+            xhr.ontimeout = () => {
+                reject(
+                    new Error(
+                        "Upload terlalu lama dan melewati batas waktu. Tekan Coba Lagi untuk melanjutkan.",
+                    ),
+                );
+            };
+
+            /*
+             * Request dibatalkan.
+             */
+            xhr.onabort = () => {
+                reject(new Error("Upload dibatalkan."));
+            };
+
+            /*
+             * ==================================
+             * FORM DATA
+             * ==================================
+             */
+            const formData = new FormData();
+
+            formData.append("image", file, file.name);
+
+            /*
+             * Tambahkan _token juga sebagai
+             * fallback selain header.
+             */
+            if (csrf?.type === "meta") {
+                formData.append("_token", csrf.token);
             }
 
-            if (xhr.status >= 200 && xhr.status < 300 && response?.stored) {
-                resolve(response);
-                return;
-            }
+            /*
+             * Jangan set Content-Type manual.
+             *
+             * Browser harus membuat
+             * multipart boundary sendiri.
+             */
+            xhr.send(formData);
+        } catch (error) {
+            console.error("XHR initialization error:", error);
 
-            reject(new Error(extractError(response)));
-        };
-
-        xhr.onerror = () => {
-            reject(new Error("Koneksi terputus saat mengunggah gambar."));
-        };
-
-        xhr.ontimeout = () => {
-            reject(new Error("Upload terlalu lama dan melewati batas waktu."));
-        };
-
-        const formData = new FormData();
-
-        formData.append("image", file);
-
-        if (csrf?.type === "meta") {
-            formData.append("_token", csrf.token);
+            reject(
+                new Error(
+                    error?.message ||
+                        "Browser tidak dapat memulai proses upload.",
+                ),
+            );
         }
-
-        xhr.send(formData);
     });
 }
 
-/**
- * Hapus temporary upload dari Drive.
+/*
+ * ======================================================
+ * HAPUS TEMPORARY UPLOAD
+ * ======================================================
  */
 function deleteTemporaryUpload(stored) {
     return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
+        let xhr;
 
-        xhr.open("POST", route("admin.posts.images.delete-temp"));
+        try {
+            xhr = new XMLHttpRequest();
 
-        xhr.responseType = "json";
+            xhr.open("POST", route("admin.posts.images.delete-temp"), true);
 
-        xhr.timeout = 120000;
+            /*
+             * Sama:
+             * jangan pakai responseType json.
+             */
 
-        xhr.setRequestHeader("Accept", "application/json");
+            xhr.timeout = 120000;
 
-        xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+            xhr.setRequestHeader("Accept", "application/json");
 
-        const csrf = getCsrfData();
+            xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
 
-        if (csrf?.type === "meta") {
-            xhr.setRequestHeader("X-CSRF-TOKEN", csrf.token);
-        }
+            const csrf = getCsrfData();
 
-        if (csrf?.type === "cookie") {
-            xhr.setRequestHeader("X-XSRF-TOKEN", csrf.token);
-        }
-
-        xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                resolve();
-                return;
+            if (csrf?.type === "meta") {
+                xhr.setRequestHeader("X-CSRF-TOKEN", csrf.token);
             }
 
-            reject(new Error(extractError(xhr.response)));
-        };
+            if (csrf?.type === "cookie") {
+                xhr.setRequestHeader("X-XSRF-TOKEN", csrf.token);
+            }
 
-        xhr.onerror = () => {
-            reject(new Error("Gagal menghapus temporary upload."));
-        };
+            xhr.onload = () => {
+                const response = parseJsonResponse(xhr);
 
-        const formData = new FormData();
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(response);
 
-        formData.append("stored", stored);
+                    return;
+                }
 
-        if (csrf?.type === "meta") {
-            formData.append("_token", csrf.token);
+                reject(
+                    new Error(
+                        extractError(
+                            response,
+                            `Gagal menghapus temporary upload. HTTP ${xhr.status}.`,
+                        ),
+                    ),
+                );
+            };
+
+            xhr.onerror = () => {
+                reject(
+                    new Error(
+                        "Koneksi terputus saat menghapus temporary upload.",
+                    ),
+                );
+            };
+
+            xhr.ontimeout = () => {
+                reject(
+                    new Error(
+                        "Proses menghapus temporary upload terlalu lama.",
+                    ),
+                );
+            };
+
+            const formData = new FormData();
+
+            formData.append("stored", stored);
+
+            if (csrf?.type === "meta") {
+                formData.append("_token", csrf.token);
+            }
+
+            xhr.send(formData);
+        } catch (error) {
+            console.error("Delete temporary XHR error:", error);
+
+            reject(
+                new Error(
+                    error?.message ||
+                        "Browser gagal menghapus temporary upload.",
+                ),
+            );
         }
-
-        xhr.send(formData);
     });
 }
 
+/*
+ * ======================================================
+ * QUEUE HOOK
+ * ======================================================
+ */
 export default function useImageUploadQueue() {
     const [items, setItems] = useState([]);
 
+    /*
+     * itemsRef diperlukan karena queue berjalan
+     * asynchronous.
+     */
     const itemsRef = useRef([]);
 
-    /**
-     * State dan ref selalu sinkron.
+    /*
+     * Sinkronkan state + ref.
      */
     const commitItems = (updater) => {
         setItems((previous) => {
@@ -230,24 +457,27 @@ export default function useImageUploadQueue() {
         });
     };
 
-    /**
-     * Bersihkan preview ketika
-     * component di-unmount.
-     *
-     * File Drive TIDAK dihapus di sini
-     * karena mungkin sudah menjadi bagian
-     * dari post yang sukses disimpan.
+    /*
+     * Cleanup object URLs ketika component
+     * benar-benar hilang.
      */
     useEffect(() => {
         return () => {
             itemsRef.current.forEach((item) => {
                 if (item.preview) {
-                    URL.revokeObjectURL(item.preview);
+                    try {
+                        URL.revokeObjectURL(item.preview);
+                    } catch {
+                        // Tidak perlu menggagalkan app.
+                    }
                 }
             });
         };
     }, []);
 
+    /*
+     * Buat item queue.
+     */
     const createItem = (file) => ({
         id: makeId(),
 
@@ -257,14 +487,13 @@ export default function useImageUploadQueue() {
 
         preview: URL.createObjectURL(file),
 
-        status: "queued",
-
         /*
          * queued
          * uploading
          * done
          * error
          */
+        status: "queued",
 
         progress: 0,
 
@@ -275,11 +504,10 @@ export default function useImageUploadQueue() {
         error: null,
     });
 
-    /**
-     * Tambahkan banyak file.
-     *
-     * File baru DITAMBAHKAN,
-     * bukan mengganti pilihan sebelumnya.
+    /*
+     * ==================================================
+     * TAMBAH FILE
+     * ==================================================
      */
     const addFiles = (rawFiles) => {
         const selectedFiles = Array.from(rawFiles || []);
@@ -290,17 +518,17 @@ export default function useImageUploadQueue() {
 
         const rejected = [];
 
-        for (const file of selectedFiles) {
+        selectedFiles.forEach((file) => {
             if (!isImage(file)) {
-                rejected.push(`${file.name}: bukan gambar`);
+                rejected.push(`${file.name}: bukan file gambar`);
 
-                continue;
+                return;
             }
 
             if (file.size > MAX_IMAGE_SIZE) {
                 rejected.push(`${file.name}: lebih dari 50 MB`);
 
-                continue;
+                return;
             }
 
             const key = fileKey(file);
@@ -308,13 +536,42 @@ export default function useImageUploadQueue() {
             if (existingKeys.has(key)) {
                 rejected.push(`${file.name}: sudah dipilih`);
 
-                continue;
+                return;
             }
 
             existingKeys.add(key);
 
-            added.push(createItem(file));
-        }
+            try {
+                added.push(createItem(file));
+            } catch (error) {
+                /*
+                 * Kalau browser gagal membuat
+                 * object URL, jangan sampai
+                 * seluruh upload mati.
+                 */
+                console.error("Preview error:", error);
+
+                added.push({
+                    id: makeId(),
+
+                    key,
+
+                    file,
+
+                    preview: null,
+
+                    status: "queued",
+
+                    progress: 0,
+
+                    stored: null,
+
+                    url: null,
+
+                    error: null,
+                });
+            }
+        });
 
         if (added.length > 0) {
             commitItems((previous) => [...previous, ...added]);
@@ -327,9 +584,8 @@ export default function useImageUploadQueue() {
         };
     };
 
-    /**
-     * Untuk Informasi:
-     * hanya boleh satu gambar.
+    /*
+     * Informasi hanya satu gambar.
      */
     const replaceSingleFile = async (file) => {
         await clearAll();
@@ -337,11 +593,10 @@ export default function useImageUploadQueue() {
         return addFiles([file]);
     };
 
-    /**
-     * Hapus satu item queue.
-     *
-     * Kalau item SUDAH masuk Drive,
-     * hapus juga temporary file Drive.
+    /*
+     * ==================================================
+     * REMOVE SATU FOTO
+     * ==================================================
      */
     const removeItem = async (id) => {
         const item = itemsRef.current.find((row) => row.id === id);
@@ -351,22 +606,33 @@ export default function useImageUploadQueue() {
         }
 
         if (item.status === "uploading") {
-            throw new Error("Foto sedang di-upload dan belum bisa dihapus.");
+            throw new Error("Foto sedang diproses dan belum bisa dihapus.");
         }
 
+        /*
+         * Kalau sudah berhasil ke Drive
+         * tetapi belum menjadi post,
+         * hapus temporary Drive-nya.
+         */
         if (item.stored) {
             await deleteTemporaryUpload(item.stored);
         }
 
         if (item.preview) {
-            URL.revokeObjectURL(item.preview);
+            try {
+                URL.revokeObjectURL(item.preview);
+            } catch {
+                // Abaikan.
+            }
         }
 
         commitItems((previous) => previous.filter((row) => row.id !== id));
     };
 
-    /**
-     * Kosongkan seluruh queue.
+    /*
+     * ==================================================
+     * CLEAR ALL
+     * ==================================================
      */
     const clearAll = async () => {
         const snapshot = [...itemsRef.current];
@@ -380,14 +646,18 @@ export default function useImageUploadQueue() {
                 }
 
                 if (item.preview) {
-                    URL.revokeObjectURL(item.preview);
+                    try {
+                        URL.revokeObjectURL(item.preview);
+                    } catch {
+                        // Abaikan.
+                    }
                 }
 
                 commitItems((previous) =>
                     previous.filter((row) => row.id !== item.id),
                 );
             } catch (error) {
-                errors.push(error.message);
+                errors.push(error?.message || "Gagal membersihkan file.");
             }
         }
 
@@ -396,6 +666,9 @@ export default function useImageUploadQueue() {
         }
     };
 
+    /*
+     * Update item.
+     */
     const updateItem = (id, patch) => {
         commitItems((previous) =>
             previous.map((item) =>
@@ -409,25 +682,17 @@ export default function useImageUploadQueue() {
         );
     };
 
-    /**
-     * =====================================================
-     * QUEUE UPLOAD
-     * =====================================================
+    /*
+     * ==================================================
+     * QUEUE
+     * ==================================================
      *
      * SATU FOTO PER REQUEST.
-     *
-     * Foto yang statusnya DONE dilewati.
-     *
-     * Jadi bila:
-     *
-     * 31 foto sukses
-     * foto 32 gagal
-     *
-     * klik Coba Lagi:
-     *
-     * mulai lagi dari foto 32.
      */
     const uploadAll = async () => {
+        /*
+         * Ambil snapshot terbaru.
+         */
         const working = itemsRef.current.map((item) => ({
             ...item,
         }));
@@ -436,10 +701,9 @@ export default function useImageUploadQueue() {
             const item = working[index];
 
             /*
-             * Sudah berhasil pada percobaan
-             * sebelumnya.
-             *
-             * Jangan upload ulang.
+             * Kalau sudah berhasil pada
+             * percobaan sebelumnya,
+             * skip.
              */
             if (item.status === "done" && item.stored) {
                 continue;
@@ -480,6 +744,8 @@ export default function useImageUploadQueue() {
 
                 item.url = response.url;
 
+                item.error = null;
+
                 updateItem(item.id, {
                     status: "done",
 
@@ -492,39 +758,43 @@ export default function useImageUploadQueue() {
                     error: null,
                 });
             } catch (error) {
+                console.error("Upload queue item error:", error);
+
                 item.status = "error";
 
-                item.error = error.message;
+                item.error = error?.message || "Upload gagal.";
 
                 updateItem(item.id, {
                     status: "error",
 
-                    error: error.message,
+                    error: item.error,
                 });
 
                 /*
-                 * STOP.
+                 * STOP di foto gagal.
                  *
-                 * Foto berikutnya belum
-                 * mulai sampai user Retry.
+                 * Retry nanti melanjutkan
+                 * dari sini.
                  */
-                throw new Error(`${item.file.name}: ${error.message}`);
+                throw new Error(`${item.file.name}: ${item.error}`);
             }
         }
 
         /*
-         * Kembalikan daftar yang sudah
-         * benar-benar berhasil masuk Drive.
+         * Jangan gunakan working saja,
+         * ambil state/ref yang paling baru.
          */
-        return working
+        return itemsRef.current
             .filter((item) => item.status === "done" && item.stored)
             .map((item) => ({
                 ...item,
             }));
     };
 
-    /**
-     * Statistik real-time.
+    /*
+     * ==================================================
+     * STATS
+     * ==================================================
      */
     const stats = useMemo(() => {
         const total = items.length;
@@ -537,6 +807,13 @@ export default function useImageUploadQueue() {
 
         const current = currentIndex >= 0 ? items[currentIndex] : null;
 
+        /*
+         * Progress keseluruhan dihitung
+         * berdasarkan jumlah FOTO yang
+         * benar-benar selesai ke Drive.
+         *
+         * Bukan berdasarkan byte palsu.
+         */
         const overallPercentage =
             total > 0 ? Math.round((completed / total) * 100) : 0;
 
@@ -549,7 +826,10 @@ export default function useImageUploadQueue() {
 
             current,
 
-            currentNumber: currentIndex >= 0 ? currentIndex + 1 : completed,
+            currentNumber:
+                currentIndex >= 0
+                    ? currentIndex + 1
+                    : Math.min(completed + 1, total),
 
             currentProgress: current?.progress || 0,
 
