@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Member\DashboardController as MemberDashboard;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\DriveImageController;
+use App\Http\Controllers\Admin\PostImageUploadController;
 
 Route::get('/panduan', function () {
     return Inertia::render('Panduan');
@@ -60,6 +61,25 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::post('/attendances/{id}/manual', [AttendancesController::class, 'markManual'])->name('attendances.manual');
 
     Route::resource('posts', PostController::class);
+    Route::post(
+        '/posts/upload-image',
+        [
+            PostImageUploadController::class,
+            'store',
+        ]
+    )->name(
+        'posts.images.upload'
+    );
+
+    Route::post(
+        '/posts/delete-temp-image',
+        [
+            PostImageUploadController::class,
+            'destroyTemp',
+        ]
+    )->name(
+        'posts.images.delete-temp'
+    );
 });
 
 // ==========================================

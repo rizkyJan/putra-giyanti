@@ -1,179 +1,375 @@
 import AdminLayout from "@/Layouts/AdminLayout";
+import QueuedPhotoPicker from "@/Components/QueuedPhotoPicker";
+import QueueUploadProgressModal from "@/Components/QueueUploadProgressModal";
+import useImageUploadQueue from "@/Hooks/useImageUploadQueue";
+
 import { Head, Link, useForm } from "@inertiajs/react";
 
+import { useState } from "react";
+
 export default function Create({ auth }) {
-    const { data, setData, post, processing, errors } = useForm({
+    const form = useForm({
         title: "",
+
         type: "informasi",
+
         content: "",
-        image: null,
-        images: [],
+
         status: "publish",
+
+        /*
+         * Binary file TIDAK masuk form.
+         *
+         * Hanya hasil queue:
+         *
+         * gdrive:FILE_ID
+         */
+        uploaded_image: null,
+
+        uploaded_images: [],
     });
 
-    const submit = (e) => {
-        e.preventDefault();
-        post(route("admin.posts.store"));
+    const { data, setData, processing, errors } = form;
+
+    const queue = useImageUploadQueue();
+
+    const [modalOpen, setModalOpen] = useState(false);
+
+    const [uploadStage, setUploadStage] = useState("uploading");
+
+    const [uploadError, setUploadError] = useState("");
+
+    /**
+     * Ganti tipe.
+     */
+    const handleTypeChange = async (event) => {
+        const newType = event.target.value;
+
+        try {
+            /*
+             * Kalau sebelumnya pernah
+             * upload lalu validation gagal,
+             * temporary Drive ikut dibersihkan.
+             */
+            await queue.clearAll();
+
+            setData("type", newType);
+
+            setData("uploaded_image", null);
+
+            setData("uploaded_images", []);
+        } catch (error) {
+            window.alert(error.message);
+        }
+    };
+
+    /**
+     * =================================================
+     * QUEUE -> DRIVE -> SAVE POST
+     * =================================================
+     */
+    const processSubmit = async () => {
+        if (processing) {
+            return;
+        }
+
+        setUploadError("");
+
+        /*
+         * Kalau ada foto,
+         * tampilkan modal progress.
+         */
+        if (queue.total > 0) {
+            setModalOpen(true);
+            setUploadStage("uploading");
+        }
+
+        try {
+            /*
+             * Upload queue satu per satu.
+             *
+             * Foto yang sudah DONE
+             * otomatis dilewati saat retry.
+             */
+            const uploaded = await queue.uploadAll();
+
+            /*
+             * Ambil hasil Google Drive:
+             *
+             * [
+             *   "gdrive:AAA",
+             *   "gdrive:BBB",
+             *   ...
+             * ]
+             */
+            const refs = uploaded.map((item) => item.stored);
+
+            /*
+             * Semua gambar sudah berhasil
+             * masuk Google Drive.
+             *
+             * Sekarang masuk tahap simpan
+             * data postingan ke database.
+             */
+            if (queue.total > 0) {
+                setUploadStage("finalizing");
+            }
+
+            /*
+             * PENTING:
+             *
+             * JANGAN:
+             *
+             * form
+             *   .transform(...)
+             *   .post(...)
+             *
+             * Pisahkan transform dan post.
+             */
+            form.transform((payload) => ({
+                ...payload,
+
+                uploaded_image:
+                    data.type === "informasi" ? (refs[0] ?? null) : null,
+
+                uploaded_images: data.type === "dokumentasi" ? refs : [],
+            }));
+
+            /*
+             * Baru submit form.
+             */
+            form.post(route("admin.posts.store"), {
+                preserveScroll: true,
+
+                onSuccess: () => {
+                    /*
+                     * Tidak perlu tutup modal
+                     * manual karena halaman
+                     * akan redirect ke index.
+                     */
+                },
+
+                onError: (errors) => {
+                    console.error("Final save error:", errors);
+
+                    setModalOpen(true);
+
+                    setUploadStage("error");
+
+                    setUploadError(
+                        "Semua foto sudah berhasil masuk Google Drive, tetapi data postingan belum berhasil disimpan. Periksa isian form lalu coba lagi. Foto yang sudah sukses tidak akan di-upload ulang.",
+                    );
+                },
+
+                onException: (error) => {
+                    console.error("Final save exception:", error);
+
+                    setModalOpen(true);
+
+                    setUploadStage("error");
+
+                    setUploadError(
+                        error?.message ||
+                            "Terjadi kesalahan saat menyimpan postingan.",
+                    );
+                },
+            });
+        } catch (error) {
+            console.error("Queue upload error:", error);
+
+            setModalOpen(true);
+            setUploadStage("error");
+
+            setUploadError(
+                error?.message || "Terjadi kesalahan saat upload foto.",
+            );
+        }
+    };
+
+    const submit = (event) => {
+        event.preventDefault();
+
+        processSubmit();
     };
 
     return (
         <AdminLayout user={auth.user}>
             <Head title="Tambah Data" />
 
-            <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold text-slate-800">
-                    Tambah Data Baru
-                </h3>
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h3 className="text-2xl font-bold text-slate-800">
+                        Tambah Data Baru
+                    </h3>
+
+                    <p className="mt-1 text-sm text-slate-500">
+                        Upload foto menggunakan sistem antrean agar lebih aman
+                        untuk banyak gambar.
+                    </p>
+                </div>
+
                 <Link
                     href={route("admin.posts.index")}
-                    className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-300 transition"
+                    className="rounded-xl bg-slate-200 px-4 py-2 text-center font-semibold text-slate-700 transition hover:bg-slate-300"
                 >
                     Kembali
                 </Link>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden max-w-4xl">
-                <form onSubmit={submit} className="p-6 sm:p-8 space-y-6">
-                    {/* Judul */}
+            <div className="max-w-5xl overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+                <form onSubmit={submit} className="space-y-7 p-6 sm:p-8">
+                    {/* JUDUL */}
                     <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">
+                        <label className="mb-2 block text-sm font-bold text-slate-700">
                             Judul
                         </label>
+
                         <input
                             type="text"
                             value={data.title}
-                            onChange={(e) => setData("title", e.target.value)}
-                            className="w-full rounded-xl border-slate-300 focus:border-indigo-500 focus:ring focus:ring-indigo-200 transition-shadow"
-                            placeholder="Contoh: Jadwal Jalan Sehat / Dokumentasi 17an"
+                            onChange={(event) =>
+                                setData(
+                                    "title",
+
+                                    event.target.value,
+                                )
+                            }
+                            placeholder="Contoh: Dokumentasi Lomba Anak Anak"
+                            className="w-full rounded-xl border-slate-300 focus:border-indigo-500 focus:ring focus:ring-indigo-200"
                         />
+
                         {errors.title && (
-                            <p className="text-rose-500 text-sm mt-1">
+                            <p className="mt-1 text-sm text-rose-600">
                                 {errors.title}
                             </p>
                         )}
                     </div>
 
-                    {/* Tipe Post */}
+                    {/* TYPE */}
                     <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">
+                        <label className="mb-2 block text-sm font-bold text-slate-700">
                             Jenis Postingan
                         </label>
+
                         <select
                             value={data.type}
-                            onChange={(e) => {
-                                setData("type", e.target.value);
-                                // Reset file saat ganti tipe
-                                setData("image", null);
-                                setData("images", []);
-                            }}
-                            className="w-full rounded-xl border-slate-300 focus:border-indigo-500 focus:ring focus:ring-indigo-200 transition-shadow bg-slate-50"
+                            onChange={handleTypeChange}
+                            className="w-full rounded-xl border-slate-300 bg-slate-50 focus:border-indigo-500"
                         >
                             <option value="informasi">
-                                Informasi (1 Poster/Gambar)
+                                Informasi (1 Gambar)
                             </option>
+
                             <option value="dokumentasi">
-                                Dokumentasi (Banyak Gambar Galeri)
+                                Dokumentasi (Banyak Foto)
                             </option>
                         </select>
                     </div>
 
-                    {/* Input Gambar (Dinamis berdasarkan Tipe) */}
-                    {data.type === "informasi" ? (
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">
-                                Poster Utama
-                            </label>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) =>
-                                    setData("image", e.target.files[0])
-                                }
-                                className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
-                            />
-                            <p className="text-xs text-slate-400 mt-2">
-                                Pilih 1 gambar saja. Maksimal 50 MB.
-                            </p>
-                            {errors.image && (
-                                <p className="text-rose-500 text-sm mt-1">
-                                    {errors.image}
-                                </p>
-                            )}
-                        </div>
-                    ) : (
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">
-                                Gambar Dokumentasi (Bisa Pilih Banyak)
-                            </label>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                onChange={(e) =>
-                                    setData(
-                                        "images",
-                                        Array.from(e.target.files),
-                                    )
-                                }
-                                className="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer"
-                            />
-                            <p className="text-xs text-slate-400 mt-2">
-                                Blok/Pilih banyak gambar sekaligus di
-                                komputermu. Maksimal 50 MB per file.
-                            </p>
-                            {errors.images && (
-                                <p className="text-rose-500 text-sm mt-1">
-                                    {errors.images}
-                                </p>
-                            )}
-                        </div>
-                    )}
+                    {/* IMAGE PICKER */}
+                    <section className="rounded-2xl border border-indigo-100 bg-indigo-50/30 p-5 sm:p-6">
+                        <QueuedPhotoPicker
+                            queue={queue}
+                            multiple={data.type === "dokumentasi"}
+                            title={
+                                data.type === "dokumentasi"
+                                    ? "Foto Dokumentasi"
+                                    : "Gambar Informasi"
+                            }
+                            description={
+                                data.type === "dokumentasi"
+                                    ? "Pilih banyak foto. Anda bisa klik Tambah Foto berkali-kali. Saat disimpan, foto akan di-upload satu per satu. Maksimal 50 MB per foto."
+                                    : "Pilih satu gambar. Maksimal 50 MB."
+                            }
+                        />
+                    </section>
 
-                    {/* Konten */}
+                    {/* CONTENT */}
                     <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">
+                        <label className="mb-2 block text-sm font-bold text-slate-700">
                             Isi Detail / Keterangan
                         </label>
+
                         <textarea
-                            rows="6"
+                            rows="7"
                             value={data.content}
-                            onChange={(e) => setData("content", e.target.value)}
-                            className="w-full rounded-xl border-slate-300 focus:border-indigo-500 focus:ring focus:ring-indigo-200 transition-shadow resize-y"
+                            onChange={(event) =>
+                                setData(
+                                    "content",
+
+                                    event.target.value,
+                                )
+                            }
                             placeholder="Tuliskan keterangan..."
-                        ></textarea>
+                            className="w-full resize-y rounded-xl border-slate-300 focus:border-indigo-500 focus:ring focus:ring-indigo-200"
+                        />
+
                         {errors.content && (
-                            <p className="text-rose-500 text-sm mt-1">
+                            <p className="mt-1 text-sm text-rose-600">
                                 {errors.content}
                             </p>
                         )}
                     </div>
 
-                    {/* Status */}
+                    {/* STATUS */}
                     <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">
+                        <label className="mb-2 block text-sm font-bold text-slate-700">
                             Status Tayang
                         </label>
+
                         <select
                             value={data.status}
-                            onChange={(e) => setData("status", e.target.value)}
-                            className="w-full sm:w-1/3 rounded-xl border-slate-300 focus:border-indigo-500 transition-shadow bg-slate-50"
+                            onChange={(event) =>
+                                setData(
+                                    "status",
+
+                                    event.target.value,
+                                )
+                            }
+                            className="w-full rounded-xl border-slate-300 bg-slate-50 sm:w-1/3"
                         >
                             <option value="publish">Publish</option>
+
                             <option value="draft">Draft</option>
                         </select>
                     </div>
 
-                    <div className="pt-4 border-t border-slate-100">
+                    {/* ERROR */}
+                    {(errors.upload ||
+                        errors.uploaded_image ||
+                        errors.uploaded_images) && (
+                        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                            {errors.upload ||
+                                errors.uploaded_image ||
+                                errors.uploaded_images}
+                        </div>
+                    )}
+
+                    {/* SAVE */}
+                    <div className="border-t border-slate-100 pt-5">
                         <button
                             type="submit"
                             disabled={processing}
-                            className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-sm w-full sm:w-auto"
+                            className="w-full rounded-xl bg-indigo-600 px-6 py-3 font-bold text-white transition hover:bg-indigo-700 disabled:opacity-60 sm:w-auto"
                         >
-                            {processing ? "Menyimpan..." : "Simpan Data"}
+                            {processing
+                                ? "Menyimpan..."
+                                : data.type === "dokumentasi"
+                                  ? `Upload & Simpan ${queue.total} Foto`
+                                  : "Simpan Data"}
                         </button>
                     </div>
                 </form>
             </div>
+
+            <QueueUploadProgressModal
+                show={modalOpen}
+                stage={uploadStage}
+                stats={queue.stats}
+                error={uploadError}
+                onRetry={processSubmit}
+                onClose={() => setModalOpen(false)}
+            />
         </AdminLayout>
     );
 }

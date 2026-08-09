@@ -24,31 +24,12 @@ class Post extends Model
         'images' => 'array',
     ];
 
-    /*
-     * Otomatis dikirim ke React/Inertia.
-     */
     protected $appends = [
         'image_url',
         'images_urls',
-
-        /*
-         * Khusus halaman Edit.
-         *
-         * Berisi:
-         *
-         * [
-         *   {
-         *      stored: "gdrive:FILE_ID",
-         *      url: "/media/drive/FILE_ID"
-         *   }
-         * ]
-         */
         'images_items',
     ];
 
-    /**
-     * URL gambar utama Informasi.
-     */
     public function getImageUrlAttribute(): ?string
     {
         return $this->storedImageUrl(
@@ -58,86 +39,56 @@ class Post extends Model
         );
     }
 
-    /**
-     * URL galeri.
-     *
-     * Tetap dipakai Welcome/PostDetail.
-     */
     public function getImagesUrlsAttribute(): array
     {
         return collect(
             $this->images ?? []
         )
             ->map(
-                fn ($image) =>
-                    $this->storedImageUrl(
-                        $image
-                    )
+                fn($image) =>
+                $this->storedImageUrl(
+                    $image
+                )
             )
             ->filter()
             ->values()
             ->all();
     }
 
-    /**
-     * Data khusus halaman Edit.
-     *
-     * Tidak hanya URL,
-     * tetapi juga nilai yang tersimpan DB.
-     */
     public function getImagesItemsAttribute(): array
     {
         return collect(
             $this->images ?? []
         )
             ->filter(
-                fn ($image) =>
-                    is_string($image)
+                fn($image) =>
+                is_string($image)
                     && $image !== ''
             )
             ->map(
-                fn ($image) => [
-                    /*
-                     * Nilai database.
-                     *
-                     * Contoh:
-                     * gdrive:1ABCDEF
-                     */
+                fn($image) => [
                     'stored' =>
-                        $image,
+                    $image,
 
-                    /*
-                     * URL untuk <img>.
-                     */
                     'url' =>
-                        $this->storedImageUrl(
-                            $image
-                        ),
+                    $this->storedImageUrl(
+                        $image
+                    ),
                 ]
             )
             ->values()
             ->all();
     }
 
-    /**
-     * Ubah nilai database menjadi URL browser.
-     *
-     * Mendukung:
-     *
-     * 1. Google Drive
-     * 2. URL eksternal
-     * 3. Foto lama storage Laravel
-     */
     private function storedImageUrl(
         ?string $storedImage
     ): ?string {
-        if (!$storedImage) {
+        if (
+            !$storedImage
+        ) {
             return null;
         }
 
-        /*
-         * Google Drive.
-         */
         if (
             Str::startsWith(
                 $storedImage,
@@ -148,17 +99,14 @@ class Post extends Model
                 'drive.image',
                 [
                     'fileId' =>
-                        Str::after(
-                            $storedImage,
-                            'gdrive:'
-                        ),
+                    Str::after(
+                        $storedImage,
+                        'gdrive:'
+                    ),
                 ]
             );
         }
 
-        /*
-         * URL eksternal.
-         */
         if (
             Str::startsWith(
                 $storedImage,
@@ -171,23 +119,12 @@ class Post extends Model
             return $storedImage;
         }
 
-        /*
-         * Foto lama tetap didukung.
-         *
-         * Contoh:
-         *
-         * posts/gallery/abc.jpg
-         *
-         * menjadi:
-         *
-         * /storage/posts/gallery/abc.jpg
-         */
         return asset(
             'storage/'
-            . ltrim(
-                $storedImage,
-                '/'
-            )
+                . ltrim(
+                    $storedImage,
+                    '/'
+                )
         );
     }
 }

@@ -6,9 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Post;
 use App\Services\GoogleDriveService;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Throwable;
 
@@ -16,25 +16,33 @@ class PostController extends Controller
 {
     public function __construct(
         private GoogleDriveService $drive
-    ) {
-    }
+    ) {}
 
     public function index()
     {
-        $posts = Post::latest()->paginate(10);
+        $posts =
+            Post::latest()
+            ->paginate(10);
 
-        return Inertia::render('Admin/Post/Index', [
-            'posts' => $posts,
-        ]);
+        return Inertia::render(
+            'Admin/Post/Index',
+            [
+                'posts' =>
+                $posts,
+            ]
+        );
     }
 
     public function create()
     {
-        return Inertia::render('Admin/Post/Create');
+        return Inertia::render(
+            'Admin/Post/Create'
+        );
     }
 
-    public function store(Request $request)
-    {
+    public function store(
+        Request $request
+    ) {
         $request->validate([
             'title' => [
                 'required',
@@ -51,24 +59,26 @@ class PostController extends Controller
                 'required',
             ],
 
-            // Maksimal 50 MB per gambar informasi
-            'image' => [
+            /*
+             * Hasil upload queue untuk
+             * Informasi.
+             */
+            'uploaded_image' => [
                 'nullable',
-                'image',
-                'mimes:jpeg,png,jpg,gif,webp',
-                'max:51200',
+                'string',
             ],
 
-            'images' => [
+            /*
+             * Hasil upload queue untuk
+             * Dokumentasi.
+             */
+            'uploaded_images' => [
                 'nullable',
                 'array',
             ],
 
-            // Maksimal 50 MB PER gambar dokumentasi
-            'images.*' => [
-                'image',
-                'mimes:jpeg,png,jpg,gif,webp',
-                'max:51200',
+            'uploaded_images.*' => [
+                'string',
             ],
 
             'status' => [
@@ -77,97 +87,115 @@ class PostController extends Controller
             ],
         ]);
 
-        $imagePath = null;
-        $imagesPaths = [];
+        $imagePath =
+            null;
+
+        $imagesPaths =
+            [];
+
+        $usedTempUploads =
+            [];
 
         /*
-         * Kalau upload Drive berhasil tetapi database gagal,
-         * file baru akan dibersihkan lagi.
+         * =================================
+         * INFORMASI
+         * =================================
          */
-        $newUploads = [];
-
-        try {
-            /*
-             * ==========================================
-             * INFORMASI
-             * ==========================================
-             */
-            if (
-                $request->type === 'informasi'
-                && $request->hasFile('image')
-            ) {
-                $imagePath = $this->uploadToDrive(
-                    $request->file('image')
+        if (
+            $request->type ===
+            'informasi'
+        ) {
+            $requestedImage =
+                $request->input(
+                    'uploaded_image'
                 );
 
-                $newUploads[] = $imagePath;
-            }
-
-            /*
-             * ==========================================
-             * DOKUMENTASI
-             * ==========================================
-             */
-            if (
-                $request->type === 'dokumentasi'
-                && $request->hasFile('images')
-            ) {
-                foreach (
-                    $request->file('images')
-                    as $file
-                ) {
-                    if (!$file->isValid()) {
-                        continue;
-                    }
-
-                    $stored = $this->uploadToDrive(
-                        $file
+            if ($requestedImage) {
+                $imagePath =
+                    $this
+                    ->resolveTempUpload(
+                        $requestedImage,
+                        'uploaded_image'
                     );
 
-                    $imagesPaths[] = $stored;
-                    $newUploads[] = $stored;
-                }
+                $usedTempUploads[] =
+                    $imagePath;
             }
+        }
 
+        /*
+         * =================================
+         * DOKUMENTASI
+         * =================================
+         */
+        if (
+            $request->type ===
+            'dokumentasi'
+        ) {
+            $imagesPaths =
+                $this
+                ->resolveTempUploads(
+                    $request->input(
+                        'uploaded_images',
+                        []
+                    ),
+                    'uploaded_images'
+                );
+
+            $usedTempUploads =
+                $imagesPaths;
+        }
+
+        try {
             Post::create([
-                'title' => $request->title,
+                'title' =>
+                $request->title,
 
-                'slug' => Str::slug(
+                'slug' =>
+                Str::slug(
                     $request->title
                 ),
 
-                'type' => $request->type,
+                'type' =>
+                $request->type,
 
-                'content' => $request->content,
+                'content' =>
+                $request->content,
 
-                'image' => $imagePath,
+                'image' =>
+                $imagePath,
 
-                'images' => empty($imagesPaths)
+                'images' =>
+                empty($imagesPaths)
                     ? null
                     : $imagesPaths,
 
-                'status' => $request->status,
+                'status' =>
+                $request->status,
             ]);
-        } catch (Throwable $e) {
-            /*
-             * Jangan meninggalkan file baru yatim di Drive
-             * bila proses database gagal.
-             */
-            $this->cleanupNewUploads(
-                $newUploads
-            );
 
+            /*
+             * Sekarang file bukan temporary lagi.
+             */
+            $this->consumeTempUploads(
+                $usedTempUploads
+            );
+        } catch (Throwable $e) {
             report($e);
 
+            /*
+             * Jangan hapus temp upload.
+             *
+             * User bisa memperbaiki form lalu
+             * klik Simpan lagi tanpa upload ulang.
+             */
             return back()
                 ->withInput()
                 ->withErrors([
-                    $request->type === 'dokumentasi'
-                        ? 'images'
-                        : 'image'
-                    =>
-                    'Upload gambar ke Google Drive gagal. '
-                    . 'Silakan coba lagi.',
+                    'upload' =>
+                    'Data postingan gagal disimpan. '
+                        . 'Foto yang sudah berhasil di-upload '
+                        . 'tidak perlu di-upload ulang.',
                 ]);
         }
 
@@ -177,16 +205,19 @@ class PostController extends Controller
             )
             ->with(
                 'message',
-                'Informasi/Dokumentasi berhasil ditambahkan!'
+                'Data berhasil disimpan. '
+                    . 'Semua foto berhasil diunggah ke Google Drive!'
             );
     }
 
-    public function edit(Post $post)
-    {
+    public function edit(
+        Post $post
+    ) {
         return Inertia::render(
             'Admin/Post/Edit',
             [
-                'post' => $post,
+                'post' =>
+                $post,
             ]
         );
     }
@@ -211,35 +242,20 @@ class PostController extends Controller
                 'required',
             ],
 
-            /*
-             * Gambar baru untuk Informasi
-             */
-            'image' => [
+            'uploaded_image' => [
                 'nullable',
-                'image',
-                'mimes:jpeg,png,jpg,gif,webp',
-                'max:51200',
+                'string',
             ],
 
-            /*
-             * Gambar BARU yang ingin ditambahkan
-             * ke dokumentasi.
-             */
-            'images' => [
+            'uploaded_images' => [
                 'nullable',
                 'array',
             ],
 
-            'images.*' => [
-                'image',
-                'mimes:jpeg,png,jpg,gif,webp',
-                'max:51200',
+            'uploaded_images.*' => [
+                'string',
             ],
 
-            /*
-             * Daftar gambar LAMA yang dipilih
-             * admin untuk dihapus.
-             */
             'remove_images' => [
                 'nullable',
                 'array',
@@ -247,7 +263,6 @@ class PostController extends Controller
 
             'remove_images.*' => [
                 'string',
-                'max:1000',
             ],
 
             'status' => [
@@ -257,7 +272,7 @@ class PostController extends Controller
         ]);
 
         /*
-         * Ambil data gambar lama langsung dari DB.
+         * Data lama.
          */
         $oldImage =
             $post->getRawOriginal(
@@ -267,10 +282,8 @@ class PostController extends Controller
         $oldImages =
             array_values(
                 array_filter(
-                    $post->images ?? [],
-                    fn ($image) =>
-                        is_string($image)
-                        && $image !== ''
+                    $post->images ??
+                        []
                 )
             );
 
@@ -281,314 +294,241 @@ class PostController extends Controller
             $oldImages;
 
         /*
-         * File BARU yang sudah berhasil
-         * masuk Drive.
-         *
-         * Kalau DB gagal, semuanya akan
-         * dihapus kembali.
+         * File lama yang baru dihapus
+         * SETELAH DB sukses.
          */
-        $newUploads = [];
+        $deleteAfterSuccess =
+            [];
 
         /*
-         * File LAMA yang akan dihapus.
-         *
-         * File tidak langsung dihapus.
-         * Kita tunggu DB berhasil dahulu.
+         * File queue baru yang setelah DB
+         * sukses tidak lagi dianggap temporary.
          */
-        $deleteAfterSuccess = [];
+        $usedTempUploads =
+            [];
 
-        try {
+        /*
+         * =================================
+         * INFORMASI
+         * =================================
+         */
+        if (
+            $request->type ===
+            'informasi'
+        ) {
             /*
-             * ==========================================
-             * INFORMASI
-             * ==========================================
+             * Jika sebelumnya dokumentasi,
+             * galeri lama akan dihapus.
              */
             if (
-                $request->type ===
+                !empty($oldImages)
+            ) {
+                $deleteAfterSuccess =
+                    array_merge(
+                        $deleteAfterSuccess,
+                        $oldImages
+                    );
+            }
+
+            $imagesPaths =
+                [];
+
+            /*
+             * Berubah Dokumentasi -> Informasi.
+             */
+            if (
+                $post->type !==
                 'informasi'
             ) {
-                /*
-                 * Informasi tidak memakai galeri.
-                 *
-                 * Jika sebelumnya Dokumentasi,
-                 * seluruh galeri lamanya akan dihapus
-                 * SETELAH database sukses.
-                 */
-                if (!empty($oldImages)) {
-                    $deleteAfterSuccess =
-                        array_merge(
-                            $deleteAfterSuccess,
-                            $oldImages
-                        );
-                }
+                $imagePath =
+                    null;
+            }
 
-                $imagesPaths = [];
+            /*
+             * Gambar baru hasil queue.
+             */
+            $requestedNewImage =
+                $request->input(
+                    'uploaded_image'
+                );
 
-                /*
-                 * Kalau sebelumnya Dokumentasi,
-                 * tidak ada gambar utama yang
-                 * dipertahankan.
-                 */
-                if (
-                    $post->type !==
-                    'informasi'
-                ) {
-                    $imagePath = null;
-                }
+            if (
+                $requestedNewImage
+            ) {
+                $newImage =
+                    $this
+                    ->resolveTempUpload(
+                        $requestedNewImage,
+                        'uploaded_image'
+                    );
 
-                /*
-                 * Jika admin memilih gambar baru,
-                 * upload ke Drive.
-                 */
-                if (
-                    $request->hasFile(
-                        'image'
-                    )
-                ) {
-                    $stored =
-                        $this->uploadToDrive(
-                            $request->file(
-                                'image'
-                            )
-                        );
+                $imagePath =
+                    $newImage;
 
-                    $newUploads[] =
-                        $stored;
-
-                    $imagePath =
-                        $stored;
-
-                    /*
-                     * Gambar lama baru dihapus
-                     * setelah database sukses.
-                     */
-                    if ($oldImage) {
-                        $deleteAfterSuccess[] =
-                            $oldImage;
-                    }
-                }
-            } else {
-                /*
-                 * ==========================================
-                 * DOKUMENTASI
-                 * ==========================================
-                 *
-                 * Logika baru:
-                 *
-                 * FOTO LAMA
-                 *   ↓
-                 * tetap dipertahankan
-                 *
-                 * REMOVE_IMAGES
-                 *   ↓
-                 * hanya yang dipilih dihapus
-                 *
-                 * IMAGES
-                 *   ↓
-                 * foto baru DITAMBAHKAN
-                 * bukan mengganti galeri lama
-                 */
+                $usedTempUploads[] =
+                    $newImage;
 
                 /*
-                 * Dokumentasi tidak menggunakan
-                 * gambar utama.
+                 * Gambar lama dihapus setelah DB sukses.
                  */
                 if ($oldImage) {
                     $deleteAfterSuccess[] =
                         $oldImage;
                 }
+            }
+        } else {
+            /*
+             * =================================
+             * DOKUMENTASI
+             * =================================
+             */
 
-                $imagePath = null;
-
-                /*
-                 * Galeri lama hanya dipertahankan
-                 * kalau post sebelumnya memang
-                 * Dokumentasi.
-                 */
-                $baseImages =
-                    $post->type ===
-                    'dokumentasi'
-                        ? $oldImages
-                        : [];
-
-                /*
-                 * Nilai yang dikirim frontend.
-                 *
-                 * Contoh:
-                 *
-                 * [
-                 *   "gdrive:AAA",
-                 *   "gdrive:BBB"
-                 * ]
-                 */
-                $requestedRemoveImages =
-                    $request->input(
-                        'remove_images',
-                        []
-                    );
-
-                /*
-                 * KEAMANAN:
-                 *
-                 * Hanya gambar yang benar-benar
-                 * terdapat pada post ini yang
-                 * boleh dihapus.
-                 *
-                 * User tidak bisa mengirim
-                 * FILE_ID Drive sembarangan.
-                 */
-                $removeImages =
-                    array_values(
-                        array_intersect(
-                            $requestedRemoveImages,
-                            $baseImages
-                        )
-                    );
-
-                /*
-                 * Pertahankan semua foto lama
-                 * KECUALI yang dipilih X.
-                 */
-                $imagesPaths =
-                    array_values(
-                        array_filter(
-                            $baseImages,
-                            fn ($image) =>
-                                !in_array(
-                                    $image,
-                                    $removeImages,
-                                    true
-                                )
-                        )
-                    );
-
-                /*
-                 * Foto yang ditandai X
-                 * akan dihapus dari Drive nanti.
-                 */
-                $deleteAfterSuccess =
-                    array_merge(
-                        $deleteAfterSuccess,
-                        $removeImages
-                    );
-
-                /*
-                 * ==========================================
-                 * TAMBAH FOTO BARU
-                 * ==========================================
-                 *
-                 * Tidak mereset imagesPaths.
-                 *
-                 * Artinya gambar baru ditambahkan
-                 * setelah gambar lama.
-                 */
-                if (
-                    $request->hasFile(
-                        'images'
-                    )
-                ) {
-                    foreach (
-                        $request->file(
-                            'images'
-                        )
-                        as $file
-                    ) {
-                        if (
-                            !$file->isValid()
-                        ) {
-                            continue;
-                        }
-
-                        $stored =
-                            $this->uploadToDrive(
-                                $file
-                            );
-
-                        /*
-                         * TAMBAH, bukan replace.
-                         */
-                        $imagesPaths[] =
-                            $stored;
-
-                        /*
-                         * Untuk rollback bila DB gagal.
-                         */
-                        $newUploads[] =
-                            $stored;
-                    }
-                }
+            /*
+             * Dokumentasi tidak menggunakan
+             * gambar utama.
+             */
+            if ($oldImage) {
+                $deleteAfterSuccess[] =
+                    $oldImage;
             }
 
+            $imagePath =
+                null;
+
             /*
-             * ==========================================
-             * UPDATE DATABASE
-             * ==========================================
+             * Kalau sebelumnya Informasi,
+             * galeri awal kosong.
              */
+            $baseImages =
+                $post->type ===
+                'dokumentasi'
+                ? $oldImages
+                : [];
+
+            /*
+             * Foto lama yang dipilih X.
+             */
+            $requestedRemove =
+                $request->input(
+                    'remove_images',
+                    []
+                );
+
+            /*
+             * Hanya gambar milik post ini
+             * yang boleh dihapus.
+             */
+            $removeImages =
+                array_values(
+                    array_intersect(
+                        $requestedRemove,
+                        $baseImages
+                    )
+                );
+
+            /*
+             * Sisakan yang tidak di-X.
+             */
+            $imagesPaths =
+                array_values(
+                    array_filter(
+                        $baseImages,
+                        fn($image) =>
+                        !in_array(
+                            $image,
+                            $removeImages,
+                            true
+                        )
+                    )
+                );
+
+            $deleteAfterSuccess =
+                array_merge(
+                    $deleteAfterSuccess,
+                    $removeImages
+                );
+
+            /*
+             * Foto BARU hasil queue.
+             */
+            $newImages =
+                $this
+                ->resolveTempUploads(
+                    $request->input(
+                        'uploaded_images',
+                        []
+                    ),
+                    'uploaded_images'
+                );
+
+            /*
+             * Tambah.
+             * BUKAN replace.
+             */
+            $imagesPaths =
+                array_values(
+                    array_merge(
+                        $imagesPaths,
+                        $newImages
+                    )
+                );
+
+            $usedTempUploads =
+                $newImages;
+        }
+
+        try {
             $post->update([
                 'title' =>
-                    $request->title,
+                $request->title,
 
                 'slug' =>
-                    Str::slug(
-                        $request->title
-                    ),
+                Str::slug(
+                    $request->title
+                ),
 
                 'type' =>
-                    $request->type,
+                $request->type,
 
                 'content' =>
-                    $request->content,
+                $request->content,
 
                 'image' =>
-                    $imagePath,
+                $imagePath,
 
                 'images' =>
-                    empty($imagesPaths)
-                        ? null
-                        : array_values(
-                            $imagesPaths
-                        ),
+                empty($imagesPaths)
+                    ? null
+                    : $imagesPaths,
 
                 'status' =>
-                    $request->status,
+                $request->status,
             ]);
-        } catch (Throwable $e) {
-            /*
-             * Kalau ada error sebelum DB sukses,
-             * hapus semua file BARU yang tadi
-             * telanjur masuk Drive.
-             *
-             * Foto lama tetap aman.
-             */
-            $this->cleanupNewUploads(
-                $newUploads
-            );
 
+            /*
+             * Queue upload sudah resmi
+             * menjadi bagian post.
+             */
+            $this->consumeTempUploads(
+                $usedTempUploads
+            );
+        } catch (Throwable $e) {
             report($e);
 
             return back()
                 ->withInput()
                 ->withErrors([
-                    $request->type ===
-                    'dokumentasi'
-                        ? 'images'
-                        : 'image'
-                    =>
-                    'Perubahan gambar gagal disimpan '
-                    . 'ke Google Drive. '
-                    . 'Data lama tetap dipertahankan.',
+                    'upload' =>
+                    'Perubahan data gagal disimpan. '
+                        . 'Foto baru yang sudah berhasil di-upload '
+                        . 'tidak perlu di-upload ulang.',
                 ]);
         }
 
         /*
-         * ==========================================
-         * CLEANUP FILE LAMA
-         * ==========================================
+         * DB berhasil.
          *
-         * Database sudah berhasil.
-         *
-         * Baru sekarang kita benar-benar
-         * menghapus file yang ditandai.
+         * Baru hapus gambar lama.
          */
         foreach (
             array_unique(
@@ -603,11 +543,6 @@ class PostController extends Controller
                     $storedImage
                 );
             } catch (Throwable $e) {
-                /*
-                 * Jangan membuat update post gagal
-                 * hanya karena cleanup file lama
-                 * bermasalah.
-                 */
                 report($e);
             }
         }
@@ -618,17 +553,14 @@ class PostController extends Controller
             )
             ->with(
                 'message',
-                'Data berhasil diperbarui!'
+                'Data berhasil diperbarui. '
+                    . 'Perubahan galeri sudah tersimpan!'
             );
     }
 
     public function destroy(
         Post $post
     ) {
-        /*
-         * Catat semua file sebelum
-         * record database dihapus.
-         */
         $storedImages =
             array_values(
                 array_filter(
@@ -639,19 +571,14 @@ class PostController extends Controller
                                     'image'
                                 ),
                         ],
-                        $post->images ?? []
+                        $post->images ??
+                            []
                     )
                 )
             );
 
-        /*
-         * Hapus record DB.
-         */
         $post->delete();
 
-        /*
-         * Bersihkan file Drive / local.
-         */
         foreach (
             $storedImages
             as $storedImage
@@ -674,38 +601,156 @@ class PostController extends Controller
     }
 
     /**
-     * Upload file ke Drive.
-     *
-     * Database hanya menyimpan:
-     *
-     * gdrive:FILE_ID
+     * ==========================================
+     * TEMP UPLOAD SECURITY
+     * ==========================================
      */
-    private function uploadToDrive(
-        UploadedFile $file
-    ): string {
-        return
-            'gdrive:'
-            . $this
-                ->drive
-                ->upload(
-                    $file
-                );
+
+    private function getTempUploads(): array
+    {
+        return array_values(
+            array_filter(
+                session()->get(
+                    'post_temp_uploads',
+                    []
+                ),
+                fn($item) =>
+                is_string(
+                    $item
+                ) &&
+                    $item !== ''
+            )
+        );
     }
 
     /**
-     * Hapus gambar.
+     * Validasi satu temporary upload.
+     */
+    private function resolveTempUpload(
+        string $stored,
+        string $field
+    ): string {
+        $allowed =
+            $this->getTempUploads();
+
+        if (
+            !in_array(
+                $stored,
+                $allowed,
+                true
+            )
+        ) {
+            throw ValidationException::withMessages([
+                $field =>
+                'File upload tidak dikenali '
+                    . 'atau session upload sudah berakhir.',
+            ]);
+        }
+
+        return $stored;
+    }
+
+    /**
+     * Validasi banyak temporary upload.
+     */
+    private function resolveTempUploads(
+        array $requested,
+        string $field
+    ): array {
+        $requested =
+            array_values(
+                array_unique(
+                    array_filter(
+                        $requested,
+                        fn($item) =>
+                        is_string(
+                            $item
+                        ) &&
+                            $item !== ''
+                    )
+                )
+            );
+
+        if (
+            empty($requested)
+        ) {
+            return [];
+        }
+
+        $allowed =
+            $this->getTempUploads();
+
+        $invalid =
+            array_diff(
+                $requested,
+                $allowed
+            );
+
+        if (
+            !empty($invalid)
+        ) {
+            throw ValidationException::withMessages([
+                $field =>
+                'Ada file upload yang tidak dikenali '
+                    . 'atau session upload sudah berakhir.',
+            ]);
+        }
+
+        /*
+         * Urutan tetap mengikuti queue frontend.
+         */
+        return $requested;
+    }
+
+    /**
+     * Hapus temporary marker dari session.
      *
-     * Mendukung:
+     * FILE DRIVE TIDAK DIHAPUS.
      *
-     * - gdrive:FILE_ID
-     * - posts/namafile.jpg lama
+     * File sekarang resmi menjadi milik post.
+     */
+    private function consumeTempUploads(
+        array $used
+    ): void {
+        if (
+            empty($used)
+        ) {
+            return;
+        }
+
+        $current =
+            $this->getTempUploads();
+
+        $remaining =
+            array_values(
+                array_filter(
+                    $current,
+                    fn($item) =>
+                    !in_array(
+                        $item,
+                        $used,
+                        true
+                    )
+                )
+            );
+
+        session()->put(
+            'post_temp_uploads',
+            $remaining
+        );
+    }
+
+    /**
+     * Hapus gambar lama.
+     *
+     * Support:
+     *
+     * gdrive:FILE_ID
+     * posts/abc.jpg
      */
     private function deleteStoredImage(
         string $storedImage
     ): void {
-        /*
-         * Google Drive
-         */
         if (
             Str::startsWith(
                 $storedImage,
@@ -718,44 +763,17 @@ class PostController extends Controller
                     'gdrive:'
                 );
 
-            $this
-                ->drive
-                ->delete(
-                    $fileId
-                );
+            $this->drive->delete(
+                $fileId
+            );
 
             return;
         }
 
-        /*
-         * Kompatibilitas file lama
-         * di storage/app/public.
-         */
         Storage::disk(
             'public'
         )->delete(
             $storedImage
         );
-    }
-
-    /**
-     * Kalau proses gagal, hapus upload
-     * baru yang telanjur masuk Drive.
-     */
-    private function cleanupNewUploads(
-        array $uploads
-    ): void {
-        foreach (
-            $uploads
-            as $storedImage
-        ) {
-            try {
-                $this->deleteStoredImage(
-                    $storedImage
-                );
-            } catch (Throwable $e) {
-                report($e);
-            }
-        }
     }
 }
